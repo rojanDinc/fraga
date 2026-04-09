@@ -39,17 +39,17 @@ func NewProvider(cfg *config.Config, providerName string) (Provider, error) {
 	switch providerName {
 	case "openai":
 		if cfg.Providers.OpenAI.APIKey == "" {
-			return nil, fmt.Errorf("OpenAI provider not configured")
+			return nil, fmt.Errorf("the OpenAI provider not configured")
 		}
 		return NewOpenAIProvider(&cfg.Providers.OpenAI), nil
 	case "anthropic":
 		if cfg.Providers.Anthropic.APIKey == "" {
-			return nil, fmt.Errorf("Anthropic provider not configured")
+			return nil, fmt.Errorf("the Anthropic provider not configured")
 		}
 		return NewAnthropicProvider(&cfg.Providers.Anthropic), nil
 	case "openrouter":
 		if cfg.Providers.OpenRouter.APIKey == "" {
-			return nil, fmt.Errorf("OpenRouter provider not configured")
+			return nil, fmt.Errorf("the OpenRouter provider not configured")
 		}
 		return NewOpenRouterProvider(&cfg.Providers.OpenRouter), nil
 	default:
