@@ -170,7 +170,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		renderMarkdown(secondContent.String(), cfg.Settings.RenderMarkdown)
 	}
 
-	fmt.Fprintln(os.Stdout)
+	if _, err := fmt.Fprintln(os.Stdout); err != nil {
+		return fmt.Errorf("failed to write newline: %w", err)
+	}
 	return nil
 }
 
@@ -185,7 +187,9 @@ func renderMarkdown(content string, renderMarkdown bool) {
 	if !renderMarkdown || content == "" {
 		// Print raw content if markdown rendering is disabled
 		if content != "" {
-			fmt.Fprint(os.Stdout, content)
+			if _, err := fmt.Fprint(os.Stdout, content); err != nil {
+				fmt.Fprintf(os.Stderr, "[error writing output: %v]\n", err)
+			}
 		}
 		return
 	}
@@ -195,9 +199,13 @@ func renderMarkdown(content string, renderMarkdown bool) {
 	if err != nil {
 		// On error, print raw content
 		fmt.Fprintf(os.Stderr, "[markdown rendering error: %v]\n", err)
-		fmt.Fprint(os.Stdout, content)
+		if _, err := fmt.Fprint(os.Stdout, content); err != nil {
+			fmt.Fprintf(os.Stderr, "[error writing output: %v]\n", err)
+		}
 		return
 	}
 
-	fmt.Fprint(os.Stdout, out)
+	if _, err := fmt.Fprint(os.Stdout, out); err != nil {
+		fmt.Fprintf(os.Stderr, "[error writing output: %v]\n", err)
+	}
 }
