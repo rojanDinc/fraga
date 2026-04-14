@@ -6,7 +6,8 @@ before:
     - go generate ./...
 
 builds:
-  - env:
+  - main: ./cmd/fraga
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -17,13 +18,15 @@ builds:
       - arm64
     ldflags:
       - -s -w -X main.version={{.Version}}
-    binary: fraga-{{ .Version }}-{{ .Os }}-{{ .Arch }}
+    binary: fraga
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
 
 checksum:
