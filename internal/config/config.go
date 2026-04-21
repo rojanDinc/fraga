@@ -54,11 +54,10 @@ type ProviderConfig struct {
 
 // Settings holds application settings
 type Settings struct {
-	Temperature         float64 `json:"temperature"`
-	MaxTokens           int     `json:"max_tokens"`
-	SystemPrompt        string  `json:"system_prompt"`
-	DefaultSystemPrompt string  `json:"default_system_prompt"`
-	RenderMarkdown      bool    `json:"render_markdown"`
+	Temperature    float64 `json:"temperature"`
+	MaxTokens      int     `json:"max_tokens"`
+	SystemPrompt   string  `json:"system_prompt"`
+	RenderMarkdown bool    `json:"render_markdown"`
 }
 
 // MCPServer holds configuration for an MCP server
@@ -181,9 +180,6 @@ func (c *Config) applyEnvOverrides() {
 		if i, err := strconv.Atoi(val); err == nil {
 			c.Settings.MaxTokens = i
 		}
-	}
-	if val := os.Getenv("FRAGA_SYSTEM_PROMPT"); val != "" {
-		c.Settings.SystemPrompt = val
 	}
 	if val := os.Getenv("FRAGA_RENDER_MARKDOWN"); val != "" {
 		if b, err := strconv.ParseBool(val); err == nil {

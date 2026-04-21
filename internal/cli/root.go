@@ -97,8 +97,8 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		systemPromptContent = sp.Content
 		settings.Temperature = sp.Temperature
 		settings.MaxTokens = sp.MaxTokens
-	} else if cfg.Settings.DefaultSystemPrompt != "" {
-		sp, err := config.LoadSystemPrompt(cfg.Settings.DefaultSystemPrompt)
+	} else if cfg.Settings.SystemPrompt != "" {
+		sp, err := config.LoadSystemPrompt(cfg.Settings.SystemPrompt)
 		if err != nil {
 			return err
 		}

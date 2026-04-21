@@ -46,12 +46,9 @@
 		// Maximum tokens per response
 		"max_tokens": 4096,
 
-		// System prompt sent with every request (used if default_system_prompt is not set)
-		"system_prompt": "You are a helpful assistant.",
-
-		// Default system prompt to use from ~/.config/fraga/system_prompts/
-		// Overrides system_prompt if set
-		"default_system_prompt": "",
+		// System prompt to use from ~/.config/fraga/system_prompts/
+		// Leave empty to use the built-in default
+		"system_prompt": "",
 
 		// Enable markdown rendering in terminal output
 		"render_markdown": true,
