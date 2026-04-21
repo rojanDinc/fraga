@@ -1,0 +1,94 @@
+{
+	// Default model to use for all requests
+	// You can override this per-request with the --model flag
+	"default_model": "gpt-4o",
+
+	// Provider configuration
+	// Add at least one provider below
+	"providers": {
+		// OpenAI configuration
+		// Get your API key from: https://platform.openai.com/api-keys
+		"openai": {
+			"api_key": "sk-your-openai-api-key",
+			"base_url": "https://api.openai.com/v1",
+			"models": ["gpt-4o", "gpt-4o-mini"]
+		},
+
+		// Anthropic configuration
+		// Get your API key from: https://console.anthropic.com/settings/keys
+		"anthropic": {
+			"api_key": "sk-ant-your-anthropic-api-key",
+			"base_url": "https://api.anthropic.com",
+			"models": ["claude-3-5-sonnet-20241022"]
+		},
+
+		/*
+		 * OpenRouter configuration
+		 * Provides access to many models through a single API
+		 * Get your API key from: https://openrouter.ai/keys
+		 */
+		"openrouter": {
+			"api_key": "sk-or-your-openrouter-api-key",
+			"base_url": "https://openrouter.ai/api/v1",
+			"models": [
+				"openai/gpt-4o",
+				"anthropic/claude-3.5-sonnet",
+			]
+		}
+	},
+
+	// Application settings
+	"settings": {
+		// Temperature controls creativity:
+		// 0.0 = deterministic, 2.0 = very creative
+		"temperature": 0.7,
+
+		// Maximum tokens per response
+		"max_tokens": 4096,
+
+		// System prompt sent with every request
+		"system_prompt": "You are a helpful assistant.",
+
+		// Enable markdown rendering in terminal output
+		"render_markdown": true,
+	},
+
+	/*
+	 * MCP (Model Context Protocol) server configuration
+	 * See: https://modelcontextprotocol.io for more information
+	 *
+	 * MCP servers provide tools that the LLM can use to interact with external systems
+	 */
+	"mcp": {
+		// Filesystem server - allows LLM to read/write files
+		// Install: npm install -g @modelcontextprotocol/server-filesystem
+		"filesystem": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed"],
+			"env": {}
+		},
+
+		// Fetch server - allows LLM to make HTTP requests
+		// Install: npm install -g @modelcontextprotocol/server-fetch
+		"fetch": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-fetch"],
+		},
+
+		// GitHub server - allows LLM to interact with GitHub
+		// Install: npm install -g @modelcontextprotocol/server-github
+		"github": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-github"],
+			"env": {
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "your-github-token"
+			}
+		},
+
+		// Remote SSE server example
+		// Connects to a remote MCP server via Server-Sent Events
+		"remote": {
+			"url": "https://remote-mcp-server.com/sse"
+		}
+	}
+}
