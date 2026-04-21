@@ -12,7 +12,7 @@ func newInitCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Initialize configuration",
-		Long:  `Creates a default configuration file at ~/.config/fraga/fraga.json`,
+		Long:  `Creates a default configuration file at ~/.config/fraga/fraga.jsonc (with comments)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Create config file
 			if err := config.InitDefault(); err != nil {
@@ -20,13 +20,13 @@ func newInitCmd() *cobra.Command {
 				if !strings.HasPrefix(err.Error(), "config already exists") {
 					return err
 				}
-				fmt.Println("Config already exists at ~/.config/fraga/fraga.json")
+				fmt.Println("Config already exists at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc")
 				return nil
 			}
 
 			fmt.Println("Configuration initialized!")
 			fmt.Println()
-			fmt.Println("Config file created at: ~/.config/fraga/fraga.json")
+			fmt.Println("Config file created at: ~/.config/fraga/fraga.jsonc")
 			fmt.Println()
 			fmt.Println("=== Next Steps ===")
 			fmt.Println()
@@ -65,7 +65,7 @@ func newListToolsCmd() *cobra.Command {
 
 			if len(cfg.MCP) == 0 {
 				fmt.Println("No MCP servers configured.")
-				fmt.Println("Add them to ~/.config/fraga/fraga.json under the 'mcp' key")
+				fmt.Println("Add them to ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc under the 'mcp' key")
 				return nil
 			}
 

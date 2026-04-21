@@ -1,17 +1,28 @@
 package config
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/tailscale/hujson"
 )
 
+//go:embed examples/template.jsonc
+var defaultConfigTemplate []byte
+
+//go:embed examples/config.jsonc
+var exampleConfig []byte
+
 const (
-	ConfigDirName  = "fraga"
-	ConfigFileName = "fraga.json"
+	ConfigDirName       = "fraga"
+	ConfigFileName      = "fraga.json"
+	ConfigFileNameJSONC = "fraga.jsonc"
 
 	// Default provider URLs
 	DefaultOpenAIBaseURL     = "https://api.openai.com/v1"
@@ -29,9 +40,9 @@ type Config struct {
 
 // Providers holds configuration for all LLM providers
 type Providers struct {
-	OpenAI     ProviderConfig `json:"openai,omitempty"`
-	Anthropic  ProviderConfig `json:"anthropic,omitempty"`
-	OpenRouter ProviderConfig `json:"openrouter,omitempty"`
+	OpenAI     ProviderConfig `json:"openai"`
+	Anthropic  ProviderConfig `json:"anthropic"`
+	OpenRouter ProviderConfig `json:"openrouter"`
 }
 
 // ProviderConfig holds configuration for a single provider
@@ -57,12 +68,12 @@ type MCPServer struct {
 	URL     string            `json:"url,omitempty"`
 }
 
-// Load loads configuration from JSON file with environment variable overrides
+// Load loads configuration from JSON/JSONC file with environment variable overrides
 func Load() (*Config, error) {
 	cfg, err := loadFromFile()
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json. Run 'fraga init' to create one")
+			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc. Run 'fraga init' to create one")
 		}
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -88,7 +99,7 @@ func LoadWithoutValidation() (*Config, error) {
 	cfg, err := loadFromFile()
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json. Run 'fraga init' to create one")
+			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc. Run 'fraga init' to create one")
 		}
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -108,8 +119,14 @@ func loadFromFile() (*Config, error) {
 		return nil, err
 	}
 
+	// Standardize HuJSON/JSONC to standard JSON (removes comments and trailing commas)
+	standardized, err := hujson.Standardize(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(standardized, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
@@ -196,45 +213,47 @@ func getConfigPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
-	return filepath.Join(home, ".config", ConfigDirName, ConfigFileName), nil
-}
 
-// InitDefault creates a default config file
-func InitDefault() error {
-	configPath, err := getConfigPath()
-	if err != nil {
-		return err
+	configDir := filepath.Join(home, ".config", ConfigDirName)
+
+	// Check for .jsonc first (preferred for new configs with comments)
+	jsoncPath := filepath.Join(configDir, ConfigFileNameJSONC)
+	if _, err := os.Stat(jsoncPath); err == nil {
+		return jsoncPath, nil
 	}
 
-	// Check if config already exists
+	// Fall back to .json
+	jsonPath := filepath.Join(configDir, ConfigFileName)
+	return jsonPath, nil
+}
+
+// InitDefault creates a default config file with helpful comments
+func InitDefault() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	configDir := filepath.Join(home, ".config", ConfigDirName)
+
+	// Prefer .jsonc for new configs to support comments
+	configPath := filepath.Join(configDir, ConfigFileNameJSONC)
+
+	// Check if config already exists (check both .json and .jsonc)
 	if _, err := os.Stat(configPath); err == nil {
 		return fmt.Errorf("config already exists at %s", configPath)
 	}
+	jsonPath := filepath.Join(configDir, ConfigFileName)
+	if _, err := os.Stat(jsonPath); err == nil {
+		return fmt.Errorf("config already exists at %s", jsonPath)
+	}
 
 	// Create config directory
-	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Create minimal default config
-	cfg := Config{
-		DefaultModel: "",
-		Providers:    Providers{},
-		Settings: Settings{
-			Temperature:    0.7,
-			MaxTokens:      4096,
-			SystemPrompt:   "You are a helpful assistant.",
-			RenderMarkdown: true,
-		},
-	}
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	if err := os.WriteFile(configPath, defaultConfigTemplate, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -243,82 +262,19 @@ func InitDefault() error {
 
 // GetProviderForModel returns the provider name for a given model
 func (c *Config) GetProviderForModel(model string) (string, error) {
-	// Check OpenAI models
-	if c.Providers.OpenAI.APIKey != "" {
-		for _, m := range c.Providers.OpenAI.Models {
-			if m == model {
-				return "openai", nil
-			}
-		}
-		// If no models specified but API key exists, assume it's valid
-		if len(c.Providers.OpenAI.Models) == 0 {
-			return "openai", nil
-		}
-	}
-
-	// Check Anthropic models
-	if c.Providers.Anthropic.APIKey != "" {
-		for _, m := range c.Providers.Anthropic.Models {
-			if m == model {
-				return "anthropic", nil
-			}
-		}
-		if len(c.Providers.Anthropic.Models) == 0 {
-			return "anthropic", nil
-		}
-	}
-
-	// Check OpenRouter models
-	if c.Providers.OpenRouter.APIKey != "" {
-		for _, m := range c.Providers.OpenRouter.Models {
-			if m == model {
-				return "openrouter", nil
-			}
-		}
-		if len(c.Providers.OpenRouter.Models) == 0 {
-			return "openrouter", nil
-		}
+	switch {
+	case c.Providers.OpenAI.APIKey != "" && slices.Contains(c.Providers.OpenAI.Models, model):
+		return "openai", nil
+	case c.Providers.Anthropic.APIKey != "" && slices.Contains(c.Providers.Anthropic.Models, model):
+		return "anthropic", nil
+	case c.Providers.OpenRouter.APIKey != "" && slices.Contains(c.Providers.OpenRouter.Models, model):
+		return "openrouter", nil
 	}
 
 	return "", fmt.Errorf("no provider found for model: %s", model)
 }
 
-// GetExampleConfig returns an example configuration string
+// GetExampleConfig returns an example configuration string with comments
 func GetExampleConfig() string {
-	return `{
-  "default_model": "gpt-4o",
-  "providers": {
-    "openai": {
-      "api_key": "sk-your-openai-api-key",
-      "base_url": "https://api.openai.com/v1",
-      "models": ["gpt-4o", "gpt-4o-mini"]
-    },
-    "anthropic": {
-      "api_key": "sk-ant-your-anthropic-api-key",
-      "base_url": "https://api.anthropic.com",
-      "models": ["claude-3-5-sonnet-20241022"]
-    },
-    "openrouter": {
-      "api_key": "sk-or-your-openrouter-api-key",
-      "base_url": "https://openrouter.ai/api/v1",
-      "models": ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
-    }
-  },
-  "settings": {
-    "temperature": 0.7,
-    "max_tokens": 4096,
-    "system_prompt": "You are a helpful assistant.",
-    "render_markdown": true
-  },
-  "mcp": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed"],
-      "env": {}
-    },
-    "fetch": {
-      "url": "https://remote-mcp-server.com/sse"
-    }
-  }
-}`
+	return string(exampleConfig)
 }
