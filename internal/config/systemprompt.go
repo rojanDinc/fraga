@@ -35,7 +35,7 @@ func GetDefaultSystemPrompt() SystemPrompt {
 }
 
 func LoadSystemPrompt(name string) (SystemPrompt, error) {
-	configDir, err := getConfigDir()
+	configDir, err := GetConfigDir()
 	if err != nil {
 		return SystemPrompt{}, fmt.Errorf("failed to get config directory: %w", err)
 	}
@@ -61,11 +61,7 @@ func parseSystemPrompt(data []byte) (SystemPrompt, error) {
 
 	content, err := frontmatter.Parse(strings.NewReader(string(data)), &matter)
 	if err != nil {
-		return SystemPrompt{
-			Content:     strings.TrimSpace(string(data)),
-			Temperature: 0.7,
-			MaxTokens:   4096,
-		}, nil
+		return SystemPrompt{}, fmt.Errorf("failed to parse frontmatter: %w", err)
 	}
 
 	return SystemPrompt{
@@ -75,16 +71,8 @@ func parseSystemPrompt(data []byte) (SystemPrompt, error) {
 	}, nil
 }
 
-func getConfigDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
-	}
-	return filepath.Join(home, ".config", ConfigDirName), nil
-}
-
 func GetSystemPromptsDir() string {
-	configDir, err := getConfigDir()
+	configDir, err := GetConfigDir()
 	if err != nil {
 		return ""
 	}

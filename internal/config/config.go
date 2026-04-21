@@ -209,13 +209,19 @@ func (c *Config) hasConfiguredProvider() bool {
 		c.Providers.OpenRouter.APIKey != ""
 }
 
-func getConfigPath() (string, error) {
+func GetConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
+	return filepath.Join(home, ".config", ConfigDirName), nil
+}
 
-	configDir := filepath.Join(home, ".config", ConfigDirName)
+func getConfigPath() (string, error) {
+	configDir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
 
 	// Check for .jsonc first (preferred for new configs with comments)
 	jsoncPath := filepath.Join(configDir, ConfigFileNameJSONC)
@@ -230,12 +236,10 @@ func getConfigPath() (string, error) {
 
 // InitDefault creates a default config file with helpful comments
 func InitDefault() error {
-	home, err := os.UserHomeDir()
+	configDir, err := GetConfigDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return err
 	}
-
-	configDir := filepath.Join(home, ".config", ConfigDirName)
 
 	// Prefer .jsonc for new configs to support comments
 	configPath := filepath.Join(configDir, ConfigFileNameJSONC)
