@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -170,7 +171,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		renderMarkdown(secondContent.String(), cfg.Settings.RenderMarkdown)
 	}
 
-	if _, err := fmt.Fprintln(os.Stdout); err != nil {
+	if _, err := os.Stdout.WriteString("\n"); err != nil {
 		return fmt.Errorf("failed to write newline: %w", err)
 	}
 	return nil
@@ -185,27 +186,24 @@ func findServerForTool(servers map[string]config.MCPServer, toolName string) str
 
 func renderMarkdown(content string, renderMarkdown bool) {
 	if !renderMarkdown || content == "" {
-		// Print raw content if markdown rendering is disabled
 		if content != "" {
-			if _, err := fmt.Fprint(os.Stdout, content); err != nil {
-				fmt.Fprintf(os.Stderr, "[error writing output: %v]\n", err)
+			if _, err := os.Stdout.WriteString(content); err != nil {
+				slog.Error("failed to write output", "error", err)
 			}
 		}
 		return
 	}
 
-	// Render the markdown with glamour using auto style
 	out, err := glamour.Render(content, "auto")
 	if err != nil {
-		// On error, print raw content
-		fmt.Fprintf(os.Stderr, "[markdown rendering error: %v]\n", err)
-		if _, err := fmt.Fprint(os.Stdout, content); err != nil {
-			fmt.Fprintf(os.Stderr, "[error writing output: %v]\n", err)
+		slog.Error("markdown rendering failed", "error", err)
+		if _, err := os.Stdout.WriteString(content); err != nil {
+			slog.Error("failed to write output", "error", err)
 		}
 		return
 	}
 
-	if _, err := fmt.Fprint(os.Stdout, out); err != nil {
-		fmt.Fprintf(os.Stderr, "[error writing output: %v]\n", err)
+	if _, err := os.Stdout.WriteString(out); err != nil {
+		slog.Error("failed to write output", "error", err)
 	}
 }

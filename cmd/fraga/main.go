@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/rojanDinc/fraga/internal/cli"
@@ -10,7 +10,7 @@ import (
 func main() {
 	cmd := cli.NewRootCmd()
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		slog.Error("failed to execute command", "error", err)
 		os.Exit(1)
 	}
 }
