@@ -17,7 +17,7 @@ type systemPromptMatter struct {
 	MaxTokens   int     `yaml:"max_tokens"`
 }
 
-//go:embed default_system_prompt.txt
+//go:embed default_system_prompt.md
 var defaultSystemPromptContent string
 
 type SystemPrompt struct {
@@ -26,12 +26,8 @@ type SystemPrompt struct {
 	MaxTokens   int
 }
 
-func GetDefaultSystemPrompt() SystemPrompt {
-	return SystemPrompt{
-		Content:     strings.TrimSpace(defaultSystemPromptContent),
-		Temperature: 0.7,
-		MaxTokens:   4096,
-	}
+func GetDefaultSystemPrompt() (SystemPrompt, error) {
+	return parseSystemPrompt([]byte(defaultSystemPromptContent))
 }
 
 func LoadSystemPrompt(name string) (SystemPrompt, error) {
@@ -56,8 +52,6 @@ func LoadSystemPrompt(name string) (SystemPrompt, error) {
 
 func parseSystemPrompt(data []byte) (SystemPrompt, error) {
 	var matter systemPromptMatter
-	matter.Temperature = 0.7
-	matter.MaxTokens = 4096
 
 	content, err := frontmatter.Parse(strings.NewReader(string(data)), &matter)
 	if err != nil {

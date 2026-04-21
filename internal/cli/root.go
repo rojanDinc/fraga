@@ -106,7 +106,10 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		settings.Temperature = sp.Temperature
 		settings.MaxTokens = sp.MaxTokens
 	} else {
-		sp := config.GetDefaultSystemPrompt()
+		sp, err := config.GetDefaultSystemPrompt()
+		if err != nil {
+			return err
+		}
 		systemPromptContent = sp.Content
 	}
 
