@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"log/slog"
+	"fmt"
 	"strings"
 
 	"github.com/rojanDinc/fraga/internal/config"
@@ -20,22 +20,32 @@ func newInitCmd() *cobra.Command {
 				if !strings.HasPrefix(err.Error(), "config already exists") {
 					return err
 				}
-				slog.Info("config already exists at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc")
+				fmt.Println("Config already exists at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc")
 				return nil
 			}
 
-			slog.Info("configuration initialized")
-			slog.Info("config file created at: ~/.config/fraga/fraga.jsonc")
-			slog.Info("next steps: edit config file to add LLM providers, set default_model, add API keys")
-			slog.Info("example configuration", "config", config.GetExampleConfig())
-			slog.Info("environment variable overrides available",
-				"FRAGA_DEFAULT_MODEL", "",
-				"FRAGA_OPENAI_API_KEY", "",
-				"FRAGA_ANTHROPIC_API_KEY", "",
-				"FRAGA_OPENROUTER_API_KEY", "",
-				"FRAGA_TEMPERATURE", "",
-				"FRAGA_MAX_TOKENS", "",
-				"FRAGA_RENDER_MARKDOWN", "")
+			fmt.Println("Configuration initialized!")
+			fmt.Println()
+			fmt.Println("Config file created at: ~/.config/fraga/fraga.jsonc")
+			fmt.Println()
+			fmt.Println("=== Next Steps ===")
+			fmt.Println()
+			fmt.Println("1. Edit the config file to add your LLM provider(s)")
+			fmt.Println("2. Set default_model to your preferred model")
+			fmt.Println("3. Add your API keys (can also use environment variables)")
+			fmt.Println()
+			fmt.Println("=== Example Configuration ===")
+			fmt.Println(config.GetExampleConfig())
+			fmt.Println()
+			fmt.Println("=== Environment Variable Overrides ===")
+			fmt.Println("You can override any config value using environment variables:")
+			fmt.Println("  FRAGA_DEFAULT_MODEL")
+			fmt.Println("  FRAGA_OPENAI_API_KEY")
+			fmt.Println("  FRAGA_ANTHROPIC_API_KEY")
+			fmt.Println("  FRAGA_OPENROUTER_API_KEY")
+			fmt.Println("  FRAGA_TEMPERATURE")
+			fmt.Println("  FRAGA_MAX_TOKENS")
+			fmt.Println("  FRAGA_RENDER_MARKDOWN")
 
 			return nil
 		},
@@ -54,22 +64,22 @@ func newListToolsCmd() *cobra.Command {
 			}
 
 			if len(cfg.MCP) == 0 {
-				slog.Info("no MCP servers configured")
-				slog.Info("add them to ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc under the 'mcp' key")
+				fmt.Println("No MCP servers configured.")
+				fmt.Println("Add them to ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc under the 'mcp' key")
 				return nil
 			}
 
-			slog.Info("configured MCP servers")
+			fmt.Println("Configured MCP servers:")
 			for name, server := range cfg.MCP {
 				if server.URL != "" {
-					slog.Info("MCP server", "name", name, "url", server.URL, "transport", "SSE")
+					fmt.Printf("  - %s: %s (SSE)\n", name, server.URL)
 				} else {
-					slog.Info("MCP server", "name", name, "command", server.Command, "args", server.Args, "transport", "stdio")
+					fmt.Printf("  - %s: %s %v (stdio)\n", name, server.Command, server.Args)
 				}
 			}
 
-			slog.Info("to see available tools, ensure MCP servers are configured correctly")
-			slog.Info("tools are discovered dynamically when running queries")
+			fmt.Println("\nNote: To see available tools, ensure MCP servers are configured correctly.")
+			fmt.Println("Tools are discovered dynamically when running queries.")
 
 			return nil
 		},
