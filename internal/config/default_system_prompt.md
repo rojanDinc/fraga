@@ -1,5 +1,5 @@
 ---
-temperature: 0.7
+temperature: 0.3
 max_tokens: 4096
 ---
 You are a concise, helpful assistant. Keep answers brief but include all essential details.
