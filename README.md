@@ -56,15 +56,15 @@ Run `fraga init` to create a default configuration file at `~/.config/fraga/frag
 
 Any configuration value can be overridden with environment variables:
 
-| Variable | Description |
-|----------|-------------|
-| `FRAGA_DEFAULT_MODEL` | Default model to use |
-| `FRAGA_OPENAI_API_KEY` | OpenAI API key |
-| `FRAGA_ANTHROPIC_API_KEY` | Anthropic API key |
-| `FRAGA_OPENROUTER_API_KEY` | OpenRouter API key |
-| `FRAGA_TEMPERATURE` | Sampling temperature |
-| `FRAGA_MAX_TOKENS` | Maximum tokens per response |
-| `FRAGA_RENDER_MARKDOWN` | Enable markdown rendering |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FRAGA_DEFAULT_MODEL` | Default model to use | |
+| `FRAGA_OPENAI_API_KEY` | OpenAI API key | |
+| `FRAGA_ANTHROPIC_API_KEY` | Anthropic API key | |
+| `FRAGA_OPENROUTER_API_KEY` | OpenRouter API key | |
+| `FRAGA_TEMPERATURE` | Sampling temperature | 0.3 |
+| `FRAGA_MAX_TOKENS` | Maximum tokens per response | 4096 |
+| `FRAGA_RENDER_MARKDOWN` | Enable markdown rendering | false |
 
 ## Usage
 
