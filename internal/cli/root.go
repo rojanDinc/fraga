@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	modelFlag string
+	modelFlag        string
+	systemPromptFlag string
 )
 
 func NewRootCmd() *cobra.Command {
@@ -28,6 +29,7 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Override the default model to use")
+	cmd.Flags().StringVar(&systemPromptFlag, "system-prompt", "", "Use a custom system prompt from ~/.config/fraga/system_prompts/")
 	cmd.AddCommand(newInitCmd())
 	cmd.AddCommand(newListToolsCmd())
 
@@ -84,12 +86,36 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	settings := cfg.Settings
+	var systemPromptContent string
+
+	if systemPromptFlag != "" {
+		sp, err := config.LoadSystemPrompt(systemPromptFlag)
+		if err != nil {
+			return err
+		}
+		systemPromptContent = sp.Content
+		settings.Temperature = sp.Temperature
+		settings.MaxTokens = sp.MaxTokens
+	} else if cfg.Settings.DefaultSystemPrompt != "" {
+		sp, err := config.LoadSystemPrompt(cfg.Settings.DefaultSystemPrompt)
+		if err != nil {
+			return err
+		}
+		systemPromptContent = sp.Content
+		settings.Temperature = sp.Temperature
+		settings.MaxTokens = sp.MaxTokens
+	} else {
+		sp := config.GetDefaultSystemPrompt()
+		systemPromptContent = sp.Content
+	}
+
 	messages := []llm.Message{
-		{Role: "system", Content: cfg.Settings.SystemPrompt},
+		{Role: "system", Content: systemPromptContent},
 		{Role: "user", Content: question},
 	}
 
-	stream, err := provider.Chat(context.Background(), messages, llmTools, cfg.Settings)
+	stream, err := provider.Chat(context.Background(), messages, llmTools, settings)
 	if err != nil {
 		return fmt.Errorf("failed to start chat: %w", err)
 	}
@@ -118,7 +144,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	// Render markdown for the first response if no tool calls
 	if len(toolCalls) == 0 {
-		renderMarkdown(assistantContent.String(), cfg.Settings.RenderMarkdown)
+		renderMarkdown(assistantContent.String(), settings.RenderMarkdown)
 	}
 
 	if len(toolCalls) > 0 && mcpClient != nil {
@@ -146,7 +172,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		}
 		messages = append(messages, llm.Message{Role: "user", Content: string(resultJSON)})
 
-		stream, err = provider.Chat(context.Background(), messages, llmTools, cfg.Settings)
+		stream, err = provider.Chat(context.Background(), messages, llmTools, settings)
 		if err != nil {
 			return fmt.Errorf("failed to continue chat: %w", err)
 		}
@@ -167,7 +193,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		}
 
 		// Render markdown for the second response
-		renderMarkdown(secondContent.String(), cfg.Settings.RenderMarkdown)
+		renderMarkdown(secondContent.String(), settings.RenderMarkdown)
 	}
 
 	if _, err := fmt.Fprintln(os.Stdout); err != nil {

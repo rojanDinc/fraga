@@ -54,10 +54,11 @@ type ProviderConfig struct {
 
 // Settings holds application settings
 type Settings struct {
-	Temperature    float64 `json:"temperature"`
-	MaxTokens      int     `json:"max_tokens"`
-	SystemPrompt   string  `json:"system_prompt"`
-	RenderMarkdown bool    `json:"render_markdown"`
+	Temperature         float64 `json:"temperature"`
+	MaxTokens           int     `json:"max_tokens"`
+	SystemPrompt        string  `json:"system_prompt"`
+	DefaultSystemPrompt string  `json:"default_system_prompt"`
+	RenderMarkdown      bool    `json:"render_markdown"`
 }
 
 // MCPServer holds configuration for an MCP server
