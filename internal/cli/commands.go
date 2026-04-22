@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/rojanDinc/fraga/internal/config"
@@ -20,34 +21,16 @@ func newInitCmd() *cobra.Command {
 				if !strings.HasPrefix(err.Error(), "config already exists") {
 					return err
 				}
-				fmt.Println("Config already exists at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc")
+				cfgDir, err := config.GetConfigDir()
+				if err != nil {
+					return err
+				}
+
+				slog.Warn("Config already exists", "path", cfgDir)
 				return nil
 			}
 
-			fmt.Println("Configuration initialized!")
-			fmt.Println()
-			fmt.Println("Config file created at: ~/.config/fraga/fraga.jsonc")
-			fmt.Println()
-			fmt.Println("=== Next Steps ===")
-			fmt.Println()
-			fmt.Println("1. Edit the config file to add your LLM provider(s)")
-			fmt.Println("2. Set provider to your preferred provider (openai, anthropic, openrouter)")
-			fmt.Println("3. Set model to your preferred model")
-			fmt.Println("4. Add your API keys (can also use environment variables)")
-			fmt.Println()
-			fmt.Println("=== Example Configuration ===")
-			fmt.Println(config.GetExampleConfig())
-			fmt.Println()
-			fmt.Println("=== Environment Variable Overrides ===")
-			fmt.Println("You can override any config value using environment variables:")
-			fmt.Println("  FRAGA_PROVIDER")
-			fmt.Println("  FRAGA_MODEL")
-			fmt.Println("  FRAGA_OPENAI_API_KEY")
-			fmt.Println("  FRAGA_ANTHROPIC_API_KEY")
-			fmt.Println("  FRAGA_OPENROUTER_API_KEY")
-			fmt.Println("  FRAGA_TEMPERATURE")
-			fmt.Println("  FRAGA_MAX_TOKENS")
-			fmt.Println("  FRAGA_RENDER_MARKDOWN")
+			fmt.Println(initMessage)
 
 			return nil
 		},
