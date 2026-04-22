@@ -60,7 +60,12 @@ func newListToolsCmd() *cobra.Command {
 		Short: "List available MCP tools",
 		Long:  `List all available tools from configured MCP servers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadWithoutValidation()
+			cfgDir, err := config.GetConfigDir()
+			if err != nil {
+				return err
+			}
+
+			cfg, err := config.LoadWithoutValidation(cfgDir)
 			if err != nil {
 				return err
 			}

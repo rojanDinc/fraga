@@ -3,6 +3,7 @@ package config
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,6 +28,8 @@ const (
 	DefaultAnthropicBaseURL  = "https://api.anthropic.com"
 	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
 )
+
+var UnknownProviderErr = errors.New("unknown provider")
 
 // Config holds the complete Fraga configuration
 type Config struct {
@@ -67,8 +70,8 @@ type MCPServer struct {
 }
 
 // Load loads configuration from JSON/JSONC file with environment variable overrides
-func Load() (*Config, error) {
-	cfg, err := loadFromFile()
+func Load(configDir string) (*Config, error) {
+	cfg, err := loadFromFile(configDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc. Run 'fraga init' to create one")
@@ -103,8 +106,8 @@ func Load() (*Config, error) {
 }
 
 // LoadWithoutValidation loads config without requiring provider configuration
-func LoadWithoutValidation() (*Config, error) {
-	cfg, err := loadFromFile()
+func LoadWithoutValidation(configDir string) (*Config, error) {
+	cfg, err := loadFromFile(configDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc. Run 'fraga init' to create one")
@@ -116,8 +119,8 @@ func LoadWithoutValidation() (*Config, error) {
 	return cfg, nil
 }
 
-func loadFromFile() (*Config, error) {
-	configPath, err := getConfigPath()
+func loadFromFile(configDir string) (*Config, error) {
+	configPath, err := getConfigPath(configDir)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +206,7 @@ func isValidProvider(provider string) error {
 	case "openai", "anthropic", "openrouter":
 		return nil
 	default:
-		return fmt.Errorf("unknown provider: %s", provider)
+		return fmt.Errorf("%w: %s", UnknownProviderErr, provider)
 	}
 }
 
@@ -215,12 +218,7 @@ func GetConfigDir() (string, error) {
 	return filepath.Join(home, ".config", ConfigDirName), nil
 }
 
-var getConfigPath = func() (string, error) {
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return "", err
-	}
-
+func getConfigPath(configDir string) (string, error) {
 	// Check for .jsonc first (preferred for new configs with comments)
 	jsoncPath := filepath.Join(configDir, ConfigFileNameJSONC)
 	if _, err := os.Stat(jsoncPath); err == nil {

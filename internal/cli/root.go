@@ -45,8 +45,12 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 
 	question := strings.Join(args, " ")
+	cfgDir, err := config.GetConfigDir()
+	if err != nil {
+		return err
+	}
 
-	cfg, err := config.Load()
+	cfg, err := config.Load(cfgDir)
 	if err != nil {
 		return err
 	}
