@@ -10,6 +10,8 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	styles "github.com/charmbracelet/glamour/styles"
+	"github.com/charmbracelet/huh/spinner"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/rojanDinc/fraga/internal/config"
 	"github.com/rojanDinc/fraga/internal/llm"
 	"github.com/rojanDinc/fraga/internal/mcp"
@@ -127,31 +129,45 @@ func runAsk(question string) error {
 		{Role: "user", Content: question},
 	}
 
-	stream, err := provider.Chat(context.Background(), messages, llmTools, settings)
-	if err != nil {
-		return fmt.Errorf("failed to start chat: %w", err)
-	}
-
-	var toolCalls []llm.ToolCall
 	var assistantContent strings.Builder
+	var toolCalls []llm.ToolCall
 
-	// Buffer all content without printing
-	for chunk := range stream {
-		if chunk.Error != nil {
-			return fmt.Errorf("stream error: %w", chunk.Error)
-		}
+	// Phase 1: Stream the first response from the LLM
+	err = spinner.New().
+		Title("Preparing an answer...").
+		Style(
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#ff8b42")),
+		).
+		ActionWithErr(func(ctx context.Context) error {
+			stream, err := provider.Chat(ctx, messages, llmTools, settings)
+			if err != nil {
+				return fmt.Errorf("failed to start chat: %w", err)
+			}
 
-		if chunk.Content != "" {
-			assistantContent.WriteString(chunk.Content)
-		}
+			for chunk := range stream {
+				if chunk.Error != nil {
+					return fmt.Errorf("stream error: %w", chunk.Error)
+				}
 
-		if len(chunk.ToolCalls) > 0 {
-			toolCalls = chunk.ToolCalls
-		}
+				if chunk.Content != "" {
+					assistantContent.WriteString(chunk.Content)
+				}
 
-		if chunk.Done {
-			break
-		}
+				if len(chunk.ToolCalls) > 0 {
+					toolCalls = chunk.ToolCalls
+				}
+
+				if chunk.Done {
+					break
+				}
+			}
+
+			return nil
+		}).
+		Run()
+	if err != nil {
+		return err
 	}
 
 	// Render markdown for the first response if no tool calls
@@ -163,19 +179,31 @@ func runAsk(question string) error {
 
 	if len(toolCalls) > 0 && mcpClient != nil {
 		toolResults := make(map[string]*mcp.ToolResult)
-		for _, tc := range toolCalls {
-			var args map[string]any
-			if tc.Arguments != "" {
-				if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
-					return fmt.Errorf("failed to parse tool arguments: %w", err)
-				}
-			}
 
-			result, err := mcpClient.CallTool(context.Background(), findServerForTool(cfg.MCP, tc.Name), tc.Name, args)
-			if err != nil {
-				return fmt.Errorf("failed to call tool %s: %w", tc.Name, err)
-			}
-			toolResults[tc.Name] = result
+		// Phase 2: Call MCP tools
+		err = spinner.New().
+			Title("Preparing an answer...").
+			ActionWithErr(func(ctx context.Context) error {
+				for _, tc := range toolCalls {
+					var args map[string]any
+					if tc.Arguments != "" {
+						if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
+							return fmt.Errorf("failed to parse tool arguments: %w", err)
+						}
+					}
+
+					result, err := mcpClient.CallTool(ctx, findServerForTool(cfg.MCP, tc.Name), tc.Name, args)
+					if err != nil {
+						return fmt.Errorf("failed to call tool %s: %w", tc.Name, err)
+					}
+					toolResults[tc.Name] = result
+				}
+
+				return nil
+			}).
+			Run()
+		if err != nil {
+			return err
 		}
 
 		messages = append(messages, llm.Message{Role: "assistant", Content: assistantContent.String()})
@@ -186,24 +214,36 @@ func runAsk(question string) error {
 		}
 		messages = append(messages, llm.Message{Role: "user", Content: string(resultJSON)})
 
-		stream, err = provider.Chat(context.Background(), messages, llmTools, settings)
-		if err != nil {
-			return fmt.Errorf("failed to continue chat: %w", err)
-		}
-
 		var secondContent strings.Builder
-		for chunk := range stream {
-			if chunk.Error != nil {
-				return fmt.Errorf("stream error: %w", chunk.Error)
-			}
 
-			if chunk.Content != "" {
-				secondContent.WriteString(chunk.Content)
-			}
+		// Phase 3: Stream the second response after tool results
+		err = spinner.New().
+			Title("Preparing an answer...").
+			ActionWithErr(func(ctx context.Context) error {
+				stream, err := provider.Chat(ctx, messages, llmTools, settings)
+				if err != nil {
+					return fmt.Errorf("failed to continue chat: %w", err)
+				}
 
-			if chunk.Done {
-				break
-			}
+				for chunk := range stream {
+					if chunk.Error != nil {
+						return fmt.Errorf("stream error: %w", chunk.Error)
+					}
+
+					if chunk.Content != "" {
+						secondContent.WriteString(chunk.Content)
+					}
+
+					if chunk.Done {
+						break
+					}
+				}
+
+				return nil
+			}).
+			Run()
+		if err != nil {
+			return err
 		}
 
 		// Render markdown for the second response
