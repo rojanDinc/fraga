@@ -29,7 +29,7 @@ const (
 	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
 )
 
-var UnknownProviderErr = errors.New("unknown provider")
+var ErrUnknownProvider = errors.New("unknown provider")
 
 // Config holds the complete Fraga configuration
 type Config struct {
@@ -206,7 +206,7 @@ func isValidProvider(provider string) error {
 	case "openai", "anthropic", "openrouter":
 		return nil
 	default:
-		return fmt.Errorf("%w: %s", UnknownProviderErr, provider)
+		return fmt.Errorf("%w: %s", ErrUnknownProvider, provider)
 	}
 }
 

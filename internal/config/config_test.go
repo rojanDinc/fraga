@@ -27,12 +27,12 @@ func TestIsValidProvider(t *testing.T) {
 		{
 			name:        "invalid provider",
 			provider:    "unknown",
-			expectedErr: UnknownProviderErr,
+			expectedErr: ErrUnknownProvider,
 		},
 		{
 			name:        "empty provider",
 			provider:    "",
-			expectedErr: UnknownProviderErr,
+			expectedErr: ErrUnknownProvider,
 		},
 	}
 
