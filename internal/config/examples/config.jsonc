@@ -36,18 +36,13 @@
 
 	// Application settings
 	"settings": {
-		// Temperature controls creativity:
-		// 0.0 = deterministic, 2.0 = very creative
-		"temperature": 0.7,
-
-		// Maximum tokens per response
-		"max_tokens": 4096,
-
 		// System prompt to use from ~/.config/fraga/system_prompts/
-		// Leave empty to use the built-in default
+		// Specify the filename without the .md extension
+		// Leave empty or omit to use the built-in default
 		"system_prompt": "",
 
 		// Enable markdown rendering in terminal output
+		// Omit or set to false to disable
 		"render_markdown": true,
 	},
 
