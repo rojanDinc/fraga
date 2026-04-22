@@ -11,9 +11,10 @@ import (
 
 type AnthropicProvider struct {
 	client anthropic.Client
+	model  string
 }
 
-func NewAnthropicProvider(cfg *config.ProviderConfig) *AnthropicProvider {
+func NewAnthropicProvider(cfg *config.ProviderConfig, model string) *AnthropicProvider {
 	opts := []option.RequestOption{
 		option.WithAPIKey(cfg.APIKey),
 	}
@@ -26,7 +27,7 @@ func NewAnthropicProvider(cfg *config.ProviderConfig) *AnthropicProvider {
 	opts = append(opts, option.WithBaseURL(baseURL))
 
 	client := anthropic.NewClient(opts...)
-	return &AnthropicProvider{client: client}
+	return &AnthropicProvider{client: client, model: model}
 }
 
 func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (<-chan StreamChunk, error) {
@@ -57,7 +58,7 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 	}
 
 	req := anthropic.MessageNewParams{
-		Model:     "claude-3-5-sonnet-20241022",
+		Model:     anthropic.Model(p.model),
 		Messages:  anthropicMessages,
 		MaxTokens: int64(settings.MaxTokens),
 	}

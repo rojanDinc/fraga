@@ -35,23 +35,23 @@ type Provider interface {
 	Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (<-chan StreamChunk, error)
 }
 
-func NewProvider(cfg *config.Config, providerName string) (Provider, error) {
+func NewProvider(cfg *config.Config, providerName string, model string) (Provider, error) {
 	switch providerName {
 	case "openai":
 		if cfg.Providers.OpenAI.APIKey == "" {
 			return nil, fmt.Errorf("the OpenAI provider not configured")
 		}
-		return NewOpenAIProvider(&cfg.Providers.OpenAI), nil
+		return NewOpenAIProvider(&cfg.Providers.OpenAI, model), nil
 	case "anthropic":
 		if cfg.Providers.Anthropic.APIKey == "" {
 			return nil, fmt.Errorf("the Anthropic provider not configured")
 		}
-		return NewAnthropicProvider(&cfg.Providers.Anthropic), nil
+		return NewAnthropicProvider(&cfg.Providers.Anthropic, model), nil
 	case "openrouter":
 		if cfg.Providers.OpenRouter.APIKey == "" {
 			return nil, fmt.Errorf("the OpenRouter provider not configured")
 		}
-		return NewOpenRouterProvider(&cfg.Providers.OpenRouter), nil
+		return NewOpenRouterProvider(&cfg.Providers.OpenRouter, model), nil
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", providerName)
 	}

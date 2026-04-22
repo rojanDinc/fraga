@@ -11,9 +11,10 @@ import (
 
 type OpenAIProvider struct {
 	client openai.Client
+	model  string
 }
 
-func NewOpenAIProvider(cfg *config.ProviderConfig) *OpenAIProvider {
+func NewOpenAIProvider(cfg *config.ProviderConfig, model string) *OpenAIProvider {
 	opts := []option.RequestOption{
 		option.WithAPIKey(cfg.APIKey),
 	}
@@ -26,7 +27,7 @@ func NewOpenAIProvider(cfg *config.ProviderConfig) *OpenAIProvider {
 	opts = append(opts, option.WithBaseURL(baseURL))
 
 	client := openai.NewClient(opts...)
-	return &OpenAIProvider{client: client}
+	return &OpenAIProvider{client: client, model: model}
 }
 
 func (p *OpenAIProvider) Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (<-chan StreamChunk, error) {
@@ -59,7 +60,7 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []Message, tools []T
 	}
 
 	req := openai.ChatCompletionNewParams{
-		Model:     openai.ChatModelGPT4o,
+		Model:     openai.ChatModel(p.model),
 		Messages:  openaiMessages,
 		Tools:     openaiTools,
 		MaxTokens: openai.Int(int64(settings.MaxTokens)),

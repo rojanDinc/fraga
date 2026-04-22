@@ -3,12 +3,11 @@ package config
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/tailscale/hujson"
 )
@@ -30,12 +29,15 @@ const (
 	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
 )
 
+var ErrUnknownProvider = errors.New("unknown provider")
+
 // Config holds the complete Fraga configuration
 type Config struct {
-	DefaultModel string               `json:"default_model"`
-	Providers    Providers            `json:"providers"`
-	Settings     Settings             `json:"settings"`
-	MCP          map[string]MCPServer `json:"mcp,omitempty"`
+	Model     string               `json:"model"`
+	Provider  string               `json:"provider"`
+	Providers Providers            `json:"providers"`
+	Settings  Settings             `json:"settings"`
+	MCP       map[string]MCPServer `json:"mcp,omitempty"`
 }
 
 // Providers holds configuration for all LLM providers
@@ -47,9 +49,8 @@ type Providers struct {
 
 // ProviderConfig holds configuration for a single provider
 type ProviderConfig struct {
-	APIKey  string   `json:"api_key,omitempty"`
-	BaseURL string   `json:"base_url,omitempty"`
-	Models  []string `json:"models,omitempty"`
+	APIKey  string `json:"api_key,omitempty"`
+	BaseURL string `json:"base_url,omitempty"`
 }
 
 // Settings holds application settings
@@ -69,8 +70,8 @@ type MCPServer struct {
 }
 
 // Load loads configuration from JSON/JSONC file with environment variable overrides
-func Load() (*Config, error) {
-	cfg, err := loadFromFile()
+func Load(configDir string) (*Config, error) {
+	cfg, err := loadFromFile(configDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc. Run 'fraga init' to create one")
@@ -86,17 +87,27 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("no LLM provider configured. Please add at least one provider to ~/.config/fraga/fraga.json")
 	}
 
-	// Validate that default_model is set
-	if cfg.DefaultModel == "" {
-		return nil, fmt.Errorf("default_model is not set in config. Please set it in ~/.config/fraga/fraga.json")
+	// Validate that model is set
+	if cfg.Model == "" {
+		return nil, fmt.Errorf("model is not set in config. Please set it in ~/.config/fraga/fraga.json")
+	}
+
+	// Validate that provider is set
+	if cfg.Provider == "" {
+		return nil, fmt.Errorf("provider is not set in config. Please set it in ~/.config/fraga/fraga.json")
+	}
+
+	// Validate provider name
+	if err := isValidProvider(cfg.Provider); err != nil {
+		return nil, fmt.Errorf("invalid provider: %s", cfg.Provider)
 	}
 
 	return cfg, nil
 }
 
 // LoadWithoutValidation loads config without requiring provider configuration
-func LoadWithoutValidation() (*Config, error) {
-	cfg, err := loadFromFile()
+func LoadWithoutValidation(configDir string) (*Config, error) {
+	cfg, err := loadFromFile(configDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc. Run 'fraga init' to create one")
@@ -108,8 +119,8 @@ func LoadWithoutValidation() (*Config, error) {
 	return cfg, nil
 }
 
-func loadFromFile() (*Config, error) {
-	configPath, err := getConfigPath()
+func loadFromFile(configDir string) (*Config, error) {
+	configPath, err := getConfigPath(configDir)
 	if err != nil {
 		return nil, err
 	}
@@ -134,9 +145,14 @@ func loadFromFile() (*Config, error) {
 }
 
 func (c *Config) applyEnvOverrides() {
-	// Override default_model
-	if val := os.Getenv("FRAGA_DEFAULT_MODEL"); val != "" {
-		c.DefaultModel = val
+	// Override model
+	if val := os.Getenv("FRAGA_MODEL"); val != "" {
+		c.Model = val
+	}
+
+	// Override provider
+	if val := os.Getenv("FRAGA_PROVIDER"); val != "" {
+		c.Provider = val
 	}
 
 	// Override providers
@@ -146,9 +162,6 @@ func (c *Config) applyEnvOverrides() {
 	if val := os.Getenv("FRAGA_OPENAI_BASE_URL"); val != "" {
 		c.Providers.OpenAI.BaseURL = val
 	}
-	if val := os.Getenv("FRAGA_OPENAI_MODELS"); val != "" {
-		c.Providers.OpenAI.Models = parseCommaSeparated(val)
-	}
 
 	if val := os.Getenv("FRAGA_ANTHROPIC_API_KEY"); val != "" {
 		c.Providers.Anthropic.APIKey = val
@@ -156,18 +169,12 @@ func (c *Config) applyEnvOverrides() {
 	if val := os.Getenv("FRAGA_ANTHROPIC_BASE_URL"); val != "" {
 		c.Providers.Anthropic.BaseURL = val
 	}
-	if val := os.Getenv("FRAGA_ANTHROPIC_MODELS"); val != "" {
-		c.Providers.Anthropic.Models = parseCommaSeparated(val)
-	}
 
 	if val := os.Getenv("FRAGA_OPENROUTER_API_KEY"); val != "" {
 		c.Providers.OpenRouter.APIKey = val
 	}
 	if val := os.Getenv("FRAGA_OPENROUTER_BASE_URL"); val != "" {
 		c.Providers.OpenRouter.BaseURL = val
-	}
-	if val := os.Getenv("FRAGA_OPENROUTER_MODELS"); val != "" {
-		c.Providers.OpenRouter.Models = parseCommaSeparated(val)
 	}
 
 	// Override settings
@@ -188,21 +195,19 @@ func (c *Config) applyEnvOverrides() {
 	}
 }
 
-func parseCommaSeparated(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
-	}
-	return parts
-}
-
 func (c *Config) hasConfiguredProvider() bool {
 	return c.Providers.OpenAI.APIKey != "" ||
 		c.Providers.Anthropic.APIKey != "" ||
 		c.Providers.OpenRouter.APIKey != ""
+}
+
+func isValidProvider(provider string) error {
+	switch provider {
+	case "openai", "anthropic", "openrouter":
+		return nil
+	default:
+		return fmt.Errorf("%w: %s", ErrUnknownProvider, provider)
+	}
 }
 
 func GetConfigDir() (string, error) {
@@ -213,12 +218,7 @@ func GetConfigDir() (string, error) {
 	return filepath.Join(home, ".config", ConfigDirName), nil
 }
 
-func getConfigPath() (string, error) {
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return "", err
-	}
-
+func getConfigPath(configDir string) (string, error) {
 	// Check for .jsonc first (preferred for new configs with comments)
 	jsoncPath := filepath.Join(configDir, ConfigFileNameJSONC)
 	if _, err := os.Stat(jsoncPath); err == nil {
@@ -259,20 +259,6 @@ func InitDefault() error {
 	}
 
 	return nil
-}
-
-// GetProviderForModel returns the provider name for a given model
-func (c *Config) GetProviderForModel(model string) (string, error) {
-	switch {
-	case c.Providers.OpenAI.APIKey != "" && slices.Contains(c.Providers.OpenAI.Models, model):
-		return "openai", nil
-	case c.Providers.Anthropic.APIKey != "" && slices.Contains(c.Providers.Anthropic.Models, model):
-		return "anthropic", nil
-	case c.Providers.OpenRouter.APIKey != "" && slices.Contains(c.Providers.OpenRouter.Models, model):
-		return "openrouter", nil
-	}
-
-	return "", fmt.Errorf("no provider found for model: %s", model)
 }
 
 // GetExampleConfig returns an example configuration string with comments

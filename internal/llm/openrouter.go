@@ -14,7 +14,7 @@ type OpenRouterProvider struct {
 	model  string
 }
 
-func NewOpenRouterProvider(cfg *config.ProviderConfig) *OpenRouterProvider {
+func NewOpenRouterProvider(cfg *config.ProviderConfig, model string) *OpenRouterProvider {
 	opts := []option.RequestOption{
 		option.WithAPIKey(cfg.APIKey),
 	}
@@ -27,10 +27,6 @@ func NewOpenRouterProvider(cfg *config.ProviderConfig) *OpenRouterProvider {
 	opts = append(opts, option.WithBaseURL(baseURL))
 
 	client := openai.NewClient(opts...)
-	model := "openai/gpt-4o"
-	if len(cfg.Models) > 0 {
-		model = cfg.Models[0]
-	}
 
 	return &OpenRouterProvider{client: client, model: model}
 }

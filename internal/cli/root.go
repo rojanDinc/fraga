@@ -17,6 +17,7 @@ import (
 
 var (
 	modelFlag        string
+	providerFlag     string
 	systemPromptFlag string
 )
 
@@ -30,6 +31,7 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Override the default model to use")
+	cmd.Flags().StringVarP(&providerFlag, "provider", "p", "", "Override the default provider to use")
 	cmd.Flags().StringVar(&systemPromptFlag, "system-prompt", "", "Use a custom system prompt from ~/.config/fraga/system_prompts/")
 	cmd.AddCommand(newInitCmd())
 	cmd.AddCommand(newListToolsCmd())
@@ -43,23 +45,31 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 
 	question := strings.Join(args, " ")
-
-	cfg, err := config.Load()
+	cfgDir, err := config.GetConfigDir()
 	if err != nil {
 		return err
 	}
 
-	model := cfg.DefaultModel
+	cfg, err := config.Load(cfgDir)
+	if err != nil {
+		return err
+	}
+
+	model := cfg.Model
 	if modelFlag != "" {
 		model = modelFlag
 	}
 
-	providerName, err := cfg.GetProviderForModel(model)
-	if err != nil {
-		return err
+	providerName := cfg.Provider
+	if providerFlag != "" {
+		providerName = providerFlag
 	}
 
-	provider, err := llm.NewProvider(cfg, providerName)
+	if providerName != "openai" && providerName != "anthropic" && providerName != "openrouter" {
+		return fmt.Errorf("invalid provider: %q (must be openai, anthropic, or openrouter)", providerName)
+	}
+
+	provider, err := llm.NewProvider(cfg, providerName, model)
 	if err != nil {
 		return err
 	}

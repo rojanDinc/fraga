@@ -31,15 +31,17 @@ func newInitCmd() *cobra.Command {
 			fmt.Println("=== Next Steps ===")
 			fmt.Println()
 			fmt.Println("1. Edit the config file to add your LLM provider(s)")
-			fmt.Println("2. Set default_model to your preferred model")
-			fmt.Println("3. Add your API keys (can also use environment variables)")
+			fmt.Println("2. Set provider to your preferred provider (openai, anthropic, openrouter)")
+			fmt.Println("3. Set model to your preferred model")
+			fmt.Println("4. Add your API keys (can also use environment variables)")
 			fmt.Println()
 			fmt.Println("=== Example Configuration ===")
 			fmt.Println(config.GetExampleConfig())
 			fmt.Println()
 			fmt.Println("=== Environment Variable Overrides ===")
 			fmt.Println("You can override any config value using environment variables:")
-			fmt.Println("  FRAGA_DEFAULT_MODEL")
+			fmt.Println("  FRAGA_PROVIDER")
+			fmt.Println("  FRAGA_MODEL")
 			fmt.Println("  FRAGA_OPENAI_API_KEY")
 			fmt.Println("  FRAGA_ANTHROPIC_API_KEY")
 			fmt.Println("  FRAGA_OPENROUTER_API_KEY")
@@ -58,7 +60,12 @@ func newListToolsCmd() *cobra.Command {
 		Short: "List available MCP tools",
 		Long:  `List all available tools from configured MCP servers.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadWithoutValidation()
+			cfgDir, err := config.GetConfigDir()
+			if err != nil {
+				return err
+			}
+
+			cfg, err := config.LoadWithoutValidation(cfgDir)
 			if err != nil {
 				return err
 			}
