@@ -267,8 +267,3 @@ func InitDefault() error {
 
 	return nil
 }
-
-// GetExampleConfig returns an example configuration string with comments
-func GetExampleConfig() string {
-	return string(exampleConfig)
-}
