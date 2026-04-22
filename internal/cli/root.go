@@ -252,10 +252,6 @@ func runAsk(question string) error {
 		}
 	}
 
-	if _, err := os.Stdout.WriteString("\n"); err != nil {
-		return fmt.Errorf("failed to write newline: %w", err)
-	}
-
 	return nil
 }
 
@@ -268,6 +264,7 @@ func findServerForTool(servers map[string]config.MCPServer, toolName string) str
 }
 
 func printAnswer(content string, printPretty bool) error {
+	content = strings.TrimSpace(content)
 	if printPretty {
 		return printPrettyAnswer(content)
 	}
