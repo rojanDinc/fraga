@@ -9,13 +9,13 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
-	styles "github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/huh/spinner"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rojanDinc/fraga/internal/config"
 	"github.com/rojanDinc/fraga/internal/llm"
 	"github.com/rojanDinc/fraga/internal/mcp"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -275,7 +275,20 @@ func printAnswer(content string, printPretty bool) error {
 }
 
 func printPrettyAnswer(content string) error {
-	out, err := glamour.Render(content, styles.AutoStyle)
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		width = 80
+	}
+
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create glamour renderer: %w", err)
+	}
+
+	out, err := renderer.Render(content)
 	if err != nil {
 		return err
 	}
