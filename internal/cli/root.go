@@ -122,6 +122,8 @@ func runAsk(question string) error {
 			return err
 		}
 		systemPromptContent = sp.Content
+		settings.Temperature = sp.Temperature
+		settings.MaxTokens = sp.MaxTokens
 	}
 
 	messages := []llm.Message{
@@ -172,7 +174,7 @@ func runAsk(question string) error {
 
 	// Render markdown for the first response if no tool calls
 	if len(toolCalls) == 0 {
-		if err := printAnswer(assistantContent.String(), settings.RenderMarkdown); err != nil {
+		if err := printAnswer(assistantContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
 	}
@@ -247,7 +249,7 @@ func runAsk(question string) error {
 		}
 
 		// Render markdown for the second response
-		if err := printAnswer(secondContent.String(), settings.RenderMarkdown); err != nil {
+		if err := printAnswer(secondContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
 	}

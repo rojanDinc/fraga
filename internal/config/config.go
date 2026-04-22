@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/tailscale/hujson"
+	"k8s.io/utils/ptr"
 )
 
 //go:embed examples/template.jsonc
@@ -58,7 +59,13 @@ type Settings struct {
 	Temperature    float64 `json:"temperature"`
 	MaxTokens      int     `json:"max_tokens"`
 	SystemPrompt   string  `json:"system_prompt"`
-	RenderMarkdown bool    `json:"render_markdown"`
+	RenderMarkdown *bool   `json:"render_markdown,omitempty"`
+}
+
+// ShouldRenderMarkdown returns true if markdown rendering should be enabled.
+// It defaults to true when the field is omitted from config.
+func (s Settings) ShouldRenderMarkdown() bool {
+	return ptr.Deref(s.RenderMarkdown, true)
 }
 
 // MCPServer holds configuration for an MCP server
@@ -190,7 +197,7 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if val := os.Getenv("FRAGA_RENDER_MARKDOWN"); val != "" {
 		if b, err := strconv.ParseBool(val); err == nil {
-			c.Settings.RenderMarkdown = b
+			c.Settings.RenderMarkdown = &b
 		}
 	}
 }

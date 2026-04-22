@@ -34,8 +34,12 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 	stream := make(chan StreamChunk)
 
 	anthropicMessages := make([]anthropic.MessageParam, len(messages))
+	systemPromptMessages := make([]anthropic.TextBlockParam, 0)
+
 	for i, msg := range messages {
 		switch msg.Role {
+		case "system":
+			systemPromptMessages = append(systemPromptMessages, anthropic.TextBlockParam{Text: msg.Content})
 		case "user":
 			anthropicMessages[i] = anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content))
 		case "assistant":
@@ -61,6 +65,7 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 		Model:     anthropic.Model(p.model),
 		Messages:  anthropicMessages,
 		MaxTokens: int64(settings.MaxTokens),
+		System:    systemPromptMessages,
 	}
 
 	if len(anthropicTools) > 0 {
@@ -69,12 +74,6 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 
 	if settings.Temperature > 0 {
 		req.Temperature = anthropic.Float(settings.Temperature)
-	}
-
-	if settings.SystemPrompt != "" {
-		req.System = []anthropic.TextBlockParam{
-			{Text: settings.SystemPrompt},
-		}
 	}
 
 	go func() {
