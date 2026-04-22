@@ -29,9 +29,9 @@ func NewRootCmd() *cobra.Command {
 		Use:   "fraga [question]",
 		Short: "Ask one-shot questions to an LLM",
 		Long:  `Fraga is a CLI tool for asking one-shot questions to LLMs with MCP tool support.`,
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAsk(args[0])
+			return runAsk(strings.Join(args, " "))
 		},
 	}
 
