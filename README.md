@@ -1,6 +1,6 @@
 # Fraga
 
-Fraga (Fråga in swedish) translates to "question" in english is a CLI tool for asking one-shot questions to LLMs with MCP (Model Context Protocol) tool support.
+Fraga (Fråga in Swedish) translates to "question" in English is a CLI tool for asking one-shot questions to LLMs with MCP (Model Context Protocol) tool support.
 
 ## Installation
 
