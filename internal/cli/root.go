@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
+	styles "github.com/charmbracelet/glamour/styles"
 	"github.com/rojanDinc/fraga/internal/config"
 	"github.com/rojanDinc/fraga/internal/llm"
 	"github.com/rojanDinc/fraga/internal/mcp"
@@ -26,8 +27,10 @@ func NewRootCmd() *cobra.Command {
 		Use:   "fraga [question]",
 		Short: "Ask one-shot questions to an LLM",
 		Long:  `Fraga is a CLI tool for asking one-shot questions to LLMs with MCP tool support.`,
-		Args:  cobra.ArbitraryArgs,
-		RunE:  runAsk,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAsk(args[0])
+		},
 	}
 
 	cmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Override the default model to use")
@@ -39,12 +42,7 @@ func NewRootCmd() *cobra.Command {
 	return cmd
 }
 
-func runAsk(cmd *cobra.Command, args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("please provide a question to ask")
-	}
-
-	question := strings.Join(args, " ")
+func runAsk(question string) error {
 	cfgDir, err := config.GetConfigDir()
 	if err != nil {
 		return err
@@ -158,13 +156,15 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	// Render markdown for the first response if no tool calls
 	if len(toolCalls) == 0 {
-		renderMarkdown(assistantContent.String(), settings.RenderMarkdown)
+		if err := printAnswer(assistantContent.String(), settings.RenderMarkdown); err != nil {
+			slog.Error("failed to print answer", "err", err)
+		}
 	}
 
 	if len(toolCalls) > 0 && mcpClient != nil {
 		toolResults := make(map[string]*mcp.ToolResult)
 		for _, tc := range toolCalls {
-			var args map[string]interface{}
+			var args map[string]any
 			if tc.Arguments != "" {
 				if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
 					return fmt.Errorf("failed to parse tool arguments: %w", err)
@@ -207,15 +207,19 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		}
 
 		// Render markdown for the second response
-		renderMarkdown(secondContent.String(), settings.RenderMarkdown)
+		if err := printAnswer(secondContent.String(), settings.RenderMarkdown); err != nil {
+			slog.Error("failed to print answer", "err", err)
+		}
 	}
 
 	if _, err := os.Stdout.WriteString("\n"); err != nil {
 		return fmt.Errorf("failed to write newline: %w", err)
 	}
+
 	return nil
 }
 
+// TODO: Fix this function
 func findServerForTool(servers map[string]config.MCPServer, toolName string) string {
 	for name := range servers {
 		return name
@@ -223,26 +227,31 @@ func findServerForTool(servers map[string]config.MCPServer, toolName string) str
 	return ""
 }
 
-func renderMarkdown(content string, renderMarkdown bool) {
-	if !renderMarkdown || content == "" {
-		if content != "" {
-			if _, err := os.Stdout.WriteString(content); err != nil {
-				slog.Error("failed to write output", "error", err)
-			}
-		}
-		return
+func printAnswer(content string, printPretty bool) error {
+	if printPretty {
+		return printPrettyAnswer(content)
 	}
 
-	out, err := glamour.Render(content, "auto")
+	return printPlainAnswer(content)
+}
+
+func printPrettyAnswer(content string) error {
+	out, err := glamour.Render(content, styles.AutoStyle)
 	if err != nil {
-		slog.Error("markdown rendering failed", "error", err)
-		if _, err := os.Stdout.WriteString(content); err != nil {
-			slog.Error("failed to write output", "error", err)
-		}
-		return
+		return err
 	}
 
 	if _, err := os.Stdout.WriteString(out); err != nil {
 		slog.Error("failed to write output", "error", err)
 	}
+
+	return nil
+}
+
+func printPlainAnswer(content string) error {
+	if _, err := os.Stdout.WriteString(content); err != nil {
+		return err
+	}
+
+	return nil
 }
