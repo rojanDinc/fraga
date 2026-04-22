@@ -25,9 +25,7 @@ go build -o fraga ./cmd/fraga
 
 ## Pre-commit Checklist
 
-- [ ] Code formatted with `gofmt -w .`
-- [ ] All tests pass: `go test ./...`
-- [ ] No vet issues: `go vet ./...`
+- [ ] Linting and tests pass `make ci`
 - [ ] Module tidy: `go mod tidy`
 - [ ] Binary builds: `go build -o fraga ./cmd/fraga`
 - [ ] Comments added for exported items
