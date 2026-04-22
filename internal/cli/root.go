@@ -61,11 +61,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		providerName = providerFlag
 	}
 
-	if err := cfg.ValidateProviderModel(providerName, model); err != nil {
-		return err
+	if providerName != "openai" && providerName != "anthropic" && providerName != "openrouter" {
+		return fmt.Errorf("invalid provider: %q (must be openai, anthropic, or openrouter)", providerName)
 	}
 
-	provider, err := llm.NewProvider(cfg, providerName)
+	provider, err := llm.NewProvider(cfg, providerName, model)
 	if err != nil {
 		return err
 	}

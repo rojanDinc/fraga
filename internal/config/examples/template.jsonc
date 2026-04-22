@@ -13,16 +13,14 @@
 		// Get your API key from: https://platform.openai.com/api-keys
 		// "openai": {
 		// 	"api_key": "sk-your-openai-api-key",
-		// 	"base_url": "https://api.openai.com/v1",
-		// 	"models": ["gpt-4o", "gpt-4o-mini"]
+		// 	"base_url": "https://api.openai.com/v1"
 		// },
 
 		// Anthropic configuration
 		// Get your API key from: https://console.anthropic.com/settings/keys
 		// "anthropic": {
 		// 	"api_key": "sk-ant-your-anthropic-api-key",
-		// 	"base_url": "https://api.anthropic.com",
-		// 	"models": ["claude-3-5-sonnet-20241022"]
+		// 	"base_url": "https://api.anthropic.com"
 		// },
 
 		/*
@@ -32,11 +30,7 @@
 		 */
 		// "openrouter": {
 		// 	"api_key": "sk-or-your-openrouter-api-key",
-		// 	"base_url": "https://openrouter.ai/api/v1",
-		// 	"models": [
-		// 		"openai/gpt-4o",
-		// 		"anthropic/claude-3.5-sonnet"
-		// 	]
+		// 	"base_url": "https://openrouter.ai/api/v1"
 		// }
 	},
 

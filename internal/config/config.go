@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/tailscale/hujson"
 )
@@ -48,9 +46,8 @@ type Providers struct {
 
 // ProviderConfig holds configuration for a single provider
 type ProviderConfig struct {
-	APIKey  string   `json:"api_key,omitempty"`
-	BaseURL string   `json:"base_url,omitempty"`
-	Models  []string `json:"models,omitempty"`
+	APIKey  string `json:"api_key,omitempty"`
+	BaseURL string `json:"base_url,omitempty"`
 }
 
 // Settings holds application settings
@@ -97,9 +94,9 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("provider is not set in config. Please set it in ~/.config/fraga/fraga.json")
 	}
 
-	// Validate provider/model combination
-	if err := cfg.ValidateProviderModel(cfg.Provider, cfg.Model); err != nil {
-		return nil, err
+	// Validate provider name
+	if err := isValidProvider(cfg.Provider); err != nil {
+		return nil, fmt.Errorf("invalid provider: %s", cfg.Provider)
 	}
 
 	return cfg, nil
@@ -162,9 +159,6 @@ func (c *Config) applyEnvOverrides() {
 	if val := os.Getenv("FRAGA_OPENAI_BASE_URL"); val != "" {
 		c.Providers.OpenAI.BaseURL = val
 	}
-	if val := os.Getenv("FRAGA_OPENAI_MODELS"); val != "" {
-		c.Providers.OpenAI.Models = parseCommaSeparated(val)
-	}
 
 	if val := os.Getenv("FRAGA_ANTHROPIC_API_KEY"); val != "" {
 		c.Providers.Anthropic.APIKey = val
@@ -172,18 +166,12 @@ func (c *Config) applyEnvOverrides() {
 	if val := os.Getenv("FRAGA_ANTHROPIC_BASE_URL"); val != "" {
 		c.Providers.Anthropic.BaseURL = val
 	}
-	if val := os.Getenv("FRAGA_ANTHROPIC_MODELS"); val != "" {
-		c.Providers.Anthropic.Models = parseCommaSeparated(val)
-	}
 
 	if val := os.Getenv("FRAGA_OPENROUTER_API_KEY"); val != "" {
 		c.Providers.OpenRouter.APIKey = val
 	}
 	if val := os.Getenv("FRAGA_OPENROUTER_BASE_URL"); val != "" {
 		c.Providers.OpenRouter.BaseURL = val
-	}
-	if val := os.Getenv("FRAGA_OPENROUTER_MODELS"); val != "" {
-		c.Providers.OpenRouter.Models = parseCommaSeparated(val)
 	}
 
 	// Override settings
@@ -204,21 +192,19 @@ func (c *Config) applyEnvOverrides() {
 	}
 }
 
-func parseCommaSeparated(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
-	}
-	return parts
-}
-
 func (c *Config) hasConfiguredProvider() bool {
 	return c.Providers.OpenAI.APIKey != "" ||
 		c.Providers.Anthropic.APIKey != "" ||
 		c.Providers.OpenRouter.APIKey != ""
+}
+
+func isValidProvider(provider string) error {
+	switch provider {
+	case "openai", "anthropic", "openrouter":
+		return nil
+	default:
+		return fmt.Errorf("unknown provider: %s", provider)
+	}
 }
 
 func GetConfigDir() (string, error) {
@@ -229,7 +215,7 @@ func GetConfigDir() (string, error) {
 	return filepath.Join(home, ".config", ConfigDirName), nil
 }
 
-func getConfigPath() (string, error) {
+var getConfigPath = func() (string, error) {
 	configDir, err := GetConfigDir()
 	if err != nil {
 		return "", err
@@ -272,41 +258,6 @@ func InitDefault() error {
 
 	if err := os.WriteFile(configPath, defaultConfigTemplate, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	return nil
-}
-
-// GetProviderForModel returns the provider name for a given model
-func (c *Config) GetProviderForModel(model string) (string, error) {
-	switch {
-	case c.Providers.OpenAI.APIKey != "" && slices.Contains(c.Providers.OpenAI.Models, model):
-		return "openai", nil
-	case c.Providers.Anthropic.APIKey != "" && slices.Contains(c.Providers.Anthropic.Models, model):
-		return "anthropic", nil
-	case c.Providers.OpenRouter.APIKey != "" && slices.Contains(c.Providers.OpenRouter.Models, model):
-		return "openrouter", nil
-	}
-
-	return "", fmt.Errorf("no provider found for model: %s", model)
-}
-
-// ValidateProviderModel checks if the given model is available for the given provider
-func (c *Config) ValidateProviderModel(provider, model string) error {
-	var models []string
-	switch provider {
-	case "openai":
-		models = c.Providers.OpenAI.Models
-	case "anthropic":
-		models = c.Providers.Anthropic.Models
-	case "openrouter":
-		models = c.Providers.OpenRouter.Models
-	default:
-		return fmt.Errorf("unknown provider: %s", provider)
-	}
-
-	if len(models) > 0 && !slices.Contains(models, model) {
-		return fmt.Errorf("model %q is not available for provider %q", model, provider)
 	}
 
 	return nil
