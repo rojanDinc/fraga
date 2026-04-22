@@ -17,6 +17,7 @@ import (
 
 var (
 	modelFlag        string
+	providerFlag     string
 	systemPromptFlag string
 )
 
@@ -30,6 +31,7 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Override the default model to use")
+	cmd.Flags().StringVarP(&providerFlag, "provider", "p", "", "Override the default provider to use")
 	cmd.Flags().StringVar(&systemPromptFlag, "system-prompt", "", "Use a custom system prompt from ~/.config/fraga/system_prompts/")
 	cmd.AddCommand(newInitCmd())
 	cmd.AddCommand(newListToolsCmd())
@@ -49,13 +51,17 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	model := cfg.DefaultModel
+	model := cfg.Model
 	if modelFlag != "" {
 		model = modelFlag
 	}
 
-	providerName, err := cfg.GetProviderForModel(model)
-	if err != nil {
+	providerName := cfg.Provider
+	if providerFlag != "" {
+		providerName = providerFlag
+	}
+
+	if err := cfg.ValidateProviderModel(providerName, model); err != nil {
 		return err
 	}
 

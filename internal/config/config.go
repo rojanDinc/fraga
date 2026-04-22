@@ -32,10 +32,11 @@ const (
 
 // Config holds the complete Fraga configuration
 type Config struct {
-	DefaultModel string               `json:"default_model"`
-	Providers    Providers            `json:"providers"`
-	Settings     Settings             `json:"settings"`
-	MCP          map[string]MCPServer `json:"mcp,omitempty"`
+	Model     string               `json:"model"`
+	Provider  string               `json:"provider"`
+	Providers Providers            `json:"providers"`
+	Settings  Settings             `json:"settings"`
+	MCP       map[string]MCPServer `json:"mcp,omitempty"`
 }
 
 // Providers holds configuration for all LLM providers
@@ -86,9 +87,19 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("no LLM provider configured. Please add at least one provider to ~/.config/fraga/fraga.json")
 	}
 
-	// Validate that default_model is set
-	if cfg.DefaultModel == "" {
-		return nil, fmt.Errorf("default_model is not set in config. Please set it in ~/.config/fraga/fraga.json")
+	// Validate that model is set
+	if cfg.Model == "" {
+		return nil, fmt.Errorf("model is not set in config. Please set it in ~/.config/fraga/fraga.json")
+	}
+
+	// Validate that provider is set
+	if cfg.Provider == "" {
+		return nil, fmt.Errorf("provider is not set in config. Please set it in ~/.config/fraga/fraga.json")
+	}
+
+	// Validate provider/model combination
+	if err := cfg.ValidateProviderModel(cfg.Provider, cfg.Model); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil
@@ -134,9 +145,14 @@ func loadFromFile() (*Config, error) {
 }
 
 func (c *Config) applyEnvOverrides() {
-	// Override default_model
-	if val := os.Getenv("FRAGA_DEFAULT_MODEL"); val != "" {
-		c.DefaultModel = val
+	// Override model
+	if val := os.Getenv("FRAGA_MODEL"); val != "" {
+		c.Model = val
+	}
+
+	// Override provider
+	if val := os.Getenv("FRAGA_PROVIDER"); val != "" {
+		c.Provider = val
 	}
 
 	// Override providers
@@ -273,6 +289,27 @@ func (c *Config) GetProviderForModel(model string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no provider found for model: %s", model)
+}
+
+// ValidateProviderModel checks if the given model is available for the given provider
+func (c *Config) ValidateProviderModel(provider, model string) error {
+	var models []string
+	switch provider {
+	case "openai":
+		models = c.Providers.OpenAI.Models
+	case "anthropic":
+		models = c.Providers.Anthropic.Models
+	case "openrouter":
+		models = c.Providers.OpenRouter.Models
+	default:
+		return fmt.Errorf("unknown provider: %s", provider)
+	}
+
+	if len(models) > 0 && !slices.Contains(models, model) {
+		return fmt.Errorf("model %q is not available for provider %q", model, provider)
+	}
+
+	return nil
 }
 
 // GetExampleConfig returns an example configuration string with comments

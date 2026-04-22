@@ -1,7 +1,10 @@
 {
-	// Default model to use for all requests
+	// Provider to use (openai, anthropic, openrouter)
+	"provider": "openai",
+
+	// Model to use for all requests
 	// You can override this per-request with the --model flag
-	"default_model": "",
+	"model": "",
 
 	// Provider configuration
 	// Add at least one provider below
