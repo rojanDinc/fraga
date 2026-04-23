@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -30,9 +31,7 @@ func NewAnthropicProvider(cfg *config.ProviderConfig, model string) *AnthropicPr
 	return &AnthropicProvider{client: client, model: model}
 }
 
-func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (<-chan StreamChunk, error) {
-	stream := make(chan StreamChunk)
-
+func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (ChatResult, error) {
 	anthropicMessages := make([]anthropic.MessageParam, 0)
 	systemPromptMessages := make([]anthropic.TextBlockParam, 0)
 
@@ -76,50 +75,29 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 		req.Temperature = anthropic.Float(settings.Temperature)
 	}
 
-	go func() {
-		defer close(stream)
+	resp, err := p.client.Messages.New(ctx, req)
+	if err != nil {
+		return ChatResult{}, fmt.Errorf("message request failed: %w", err)
+	}
 
-		msgStream := p.client.Messages.NewStreaming(ctx, req)
+	var content strings.Builder
+	var toolCalls []ToolCall
 
-		var toolCalls []ToolCall
-		var currentToolCall *ToolCall
-
-		for msgStream.Next() {
-			event := msgStream.Current()
-
-			if text := event.Delta.Text; text != "" {
-				stream <- StreamChunk{Content: text}
-			}
-
-			if event.Delta.PartialJSON != "" {
-				if currentToolCall != nil {
-					currentToolCall.Arguments += event.Delta.PartialJSON
-				}
-			}
-
-			if event.Type == "content_block_start" {
-				toolUse := event.ContentBlock.AsToolUse()
-				if toolUse.ID != "" {
-					currentToolCall = &ToolCall{
-						ID:   toolUse.ID,
-						Name: toolUse.Name,
-					}
-					toolCalls = append(toolCalls, *currentToolCall)
-				}
-			}
-
-			if event.Type == "content_block_stop" {
-				currentToolCall = nil
-			}
+	for _, block := range resp.Content {
+		switch block.Type {
+		case "text":
+			content.WriteString(block.Text)
+		case "tool_use":
+			toolCalls = append(toolCalls, ToolCall{
+				ID:        block.ID,
+				Name:      block.Name,
+				Arguments: string(block.Input),
+			})
 		}
+	}
 
-		if err := msgStream.Err(); err != nil {
-			stream <- StreamChunk{Error: fmt.Errorf("streaming error: %w", err)}
-			return
-		}
-
-		stream <- StreamChunk{ToolCalls: toolCalls, Done: true}
-	}()
-
-	return stream, nil
+	return ChatResult{
+		Content:   content.String(),
+		ToolCalls: toolCalls,
+	}, nil
 }

@@ -134,7 +134,7 @@ func runAsk(question string) error {
 	var assistantContent strings.Builder
 	var toolCalls []llm.ToolCall
 
-	// Phase 1: Stream the first response from the LLM
+	// Phase 1: Get the first response from the LLM
 	err = spinner.New().
 		Title("Preparing an answer...").
 		Style(
@@ -142,28 +142,13 @@ func runAsk(question string) error {
 				Foreground(lipgloss.Color("#ff8b42")),
 		).
 		ActionWithErr(func(ctx context.Context) error {
-			stream, err := provider.Chat(ctx, messages, llmTools, settings)
+			result, err := provider.Chat(ctx, messages, llmTools, settings)
 			if err != nil {
 				return fmt.Errorf("failed to start chat: %w", err)
 			}
 
-			for chunk := range stream {
-				if chunk.Error != nil {
-					return fmt.Errorf("stream error: %w", chunk.Error)
-				}
-
-				if chunk.Content != "" {
-					assistantContent.WriteString(chunk.Content)
-				}
-
-				if len(chunk.ToolCalls) > 0 {
-					toolCalls = chunk.ToolCalls
-				}
-
-				if chunk.Done {
-					break
-				}
-			}
+			assistantContent.WriteString(result.Content)
+			toolCalls = result.ToolCalls
 
 			return nil
 		}).
@@ -218,28 +203,16 @@ func runAsk(question string) error {
 
 		var secondContent strings.Builder
 
-		// Phase 3: Stream the second response after tool results
+		// Phase 3: Get the second response after tool results
 		err = spinner.New().
 			Title("Preparing an answer...").
 			ActionWithErr(func(ctx context.Context) error {
-				stream, err := provider.Chat(ctx, messages, llmTools, settings)
+				result, err := provider.Chat(ctx, messages, llmTools, settings)
 				if err != nil {
 					return fmt.Errorf("failed to continue chat: %w", err)
 				}
 
-				for chunk := range stream {
-					if chunk.Error != nil {
-						return fmt.Errorf("stream error: %w", chunk.Error)
-					}
-
-					if chunk.Content != "" {
-						secondContent.WriteString(chunk.Content)
-					}
-
-					if chunk.Done {
-						break
-					}
-				}
+				secondContent.WriteString(result.Content)
 
 				return nil
 			}).
