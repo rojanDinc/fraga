@@ -33,17 +33,17 @@ func NewAnthropicProvider(cfg *config.ProviderConfig, model string) *AnthropicPr
 func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (<-chan StreamChunk, error) {
 	stream := make(chan StreamChunk)
 
-	anthropicMessages := make([]anthropic.MessageParam, len(messages))
+	anthropicMessages := make([]anthropic.MessageParam, 0)
 	systemPromptMessages := make([]anthropic.TextBlockParam, 0)
 
-	for i, msg := range messages {
+	for _, msg := range messages {
 		switch msg.Role {
 		case "system":
 			systemPromptMessages = append(systemPromptMessages, anthropic.TextBlockParam{Text: msg.Content})
 		case "user":
-			anthropicMessages[i] = anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content))
+			anthropicMessages = append(anthropicMessages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
 		case "assistant":
-			anthropicMessages[i] = anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content))
+			anthropicMessages = append(anthropicMessages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)))
 		}
 	}
 
