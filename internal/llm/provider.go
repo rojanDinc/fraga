@@ -24,15 +24,14 @@ type ToolCall struct {
 	Arguments string
 }
 
-type StreamChunk struct {
+type ChatResult struct {
 	Content   string
 	ToolCalls []ToolCall
-	Done      bool
-	Error     error
 }
 
 type Provider interface {
-	Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (<-chan StreamChunk, error)
+	// TODO: Replace settings with options belonging to this package
+	Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (ChatResult, error)
 }
 
 func NewProvider(cfg *config.Config, providerName string, model string) (Provider, error) {

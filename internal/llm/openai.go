@@ -30,9 +30,7 @@ func NewOpenAIProvider(cfg *config.ProviderConfig, model string) *OpenAIProvider
 	return &OpenAIProvider{client: client, model: model}
 }
 
-func (p *OpenAIProvider) Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (<-chan StreamChunk, error) {
-	stream := make(chan StreamChunk)
-
+func (p *OpenAIProvider) Chat(ctx context.Context, messages []Message, tools []Tool, settings config.Settings) (ChatResult, error) {
 	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, len(messages))
 	for i, msg := range messages {
 		switch msg.Role {
@@ -70,46 +68,27 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []Message, tools []T
 		req.Temperature = openai.Float(settings.Temperature)
 	}
 
-	go func() {
-		defer close(stream)
+	completion, err := p.client.Chat.Completions.New(ctx, req)
+	if err != nil {
+		return ChatResult{}, fmt.Errorf("chat completion failed: %w", err)
+	}
 
-		chatStream := p.client.Chat.Completions.NewStreaming(ctx, req)
-		defer chatStream.Close()
+	if len(completion.Choices) == 0 {
+		return ChatResult{}, fmt.Errorf("no choices in completion response")
+	}
 
-		var toolCalls []ToolCall
+	msg := completion.Choices[0].Message
+	var toolCalls []ToolCall
+	for _, tc := range msg.ToolCalls {
+		toolCalls = append(toolCalls, ToolCall{
+			ID:        tc.ID,
+			Name:      tc.Function.Name,
+			Arguments: tc.Function.Arguments,
+		})
+	}
 
-		for chatStream.Next() {
-			chunk := chatStream.Current()
-
-			if len(chunk.Choices) > 0 {
-				delta := chunk.Choices[0].Delta
-
-				if delta.Content != "" {
-					stream <- StreamChunk{Content: delta.Content}
-				}
-
-				for _, tc := range delta.ToolCalls {
-					if int(tc.Index) >= len(toolCalls) {
-						toolCalls = append(toolCalls, ToolCall{})
-					}
-					if tc.ID != "" {
-						toolCalls[tc.Index].ID = tc.ID
-					}
-					if tc.Function.Name != "" {
-						toolCalls[tc.Index].Name = tc.Function.Name
-					}
-					toolCalls[tc.Index].Arguments += tc.Function.Arguments
-				}
-			}
-		}
-
-		if err := chatStream.Err(); err != nil {
-			stream <- StreamChunk{Error: fmt.Errorf("streaming error: %w", err)}
-			return
-		}
-
-		stream <- StreamChunk{ToolCalls: toolCalls, Done: true}
-	}()
-
-	return stream, nil
+	return ChatResult{
+		Content:   msg.Content,
+		ToolCalls: toolCalls,
+	}, nil
 }
