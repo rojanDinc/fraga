@@ -27,7 +27,12 @@ func NewAnthropicProvider(cfg *config.ProviderConfig, model string) *AnthropicPr
 	}
 	opts = append(opts, option.WithBaseURL(baseURL))
 
+	for k, v := range cfg.Headers {
+		opts = append(opts, option.WithHeader(k, v))
+	}
+
 	client := anthropic.NewClient(opts...)
+
 	return &AnthropicProvider{client: client, model: model}
 }
 

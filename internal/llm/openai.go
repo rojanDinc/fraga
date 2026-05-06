@@ -26,7 +26,12 @@ func NewOpenAIProvider(cfg *config.ProviderConfig, model string) *OpenAIProvider
 	}
 	opts = append(opts, option.WithBaseURL(baseURL))
 
+	for k, v := range cfg.Headers {
+		opts = append(opts, option.WithHeader(k, v))
+	}
+
 	client := openai.NewClient(opts...)
+
 	return &OpenAIProvider{client: client, model: model}
 }
 
