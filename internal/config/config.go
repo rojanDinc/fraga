@@ -50,8 +50,9 @@ type Providers struct {
 
 // ProviderConfig holds configuration for a single provider
 type ProviderConfig struct {
-	APIKey  string `json:"api_key,omitempty"`
-	BaseURL string `json:"base_url,omitempty"`
+	APIKey  string            `json:"api_key,omitempty"`
+	BaseURL string            `json:"base_url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // Settings holds application settings

@@ -26,6 +26,10 @@ func NewOpenRouterProvider(cfg *config.ProviderConfig, model string) *OpenRouter
 	}
 	opts = append(opts, option.WithBaseURL(baseURL))
 
+	for k, v := range cfg.Headers {
+		opts = append(opts, option.WithHeader(k, v))
+	}
+
 	client := openai.NewClient(opts...)
 
 	return &OpenRouterProvider{client: client, model: model}

@@ -30,7 +30,10 @@
 		 */
 		"openrouter": {
 			"api_key": "sk-or-your-openrouter-api-key",
-			"base_url": "https://openrouter.ai/api/v1"
+			"base_url": "https://openrouter.ai/api/v1",
+			"headers": {
+				"X-Custom-Header": "custom-value"
+			}
 		}
 	},
 

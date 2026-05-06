@@ -261,6 +261,27 @@ Configuration is environment-based using envconfig:
 - Format: `FRAGA_SECTION_FIELD` (e.g., `FRAGA_OPENAI_API_KEY`)
 - MCP servers configured in `~/.config/fraga/mcp.json`
 
+### Custom Headers
+
+Each provider supports custom HTTP headers via the `headers` field in the provider configuration:
+
+```json
+"openai": {
+  "api_key": "sk-your-openai-api-key",
+  "base_url": "https://api.openai.com/v1",
+  "headers": {
+    "X-Custom-Header": "custom-value",
+    "OpenAI-Beta": "assistants=v2"
+  }
+}
+```
+
+Custom headers are applied to every outgoing HTTP request for that provider. This is useful for:
+- Setting provider-specific beta flags
+- Adding authentication headers for proxies
+- Passing custom metadata (e.g., `HTTP-Referer` for OpenRouter)
+
+
 ## Common Tasks
 
 Adding a new LLM provider:
