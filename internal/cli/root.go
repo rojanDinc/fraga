@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/huh/spinner"
@@ -17,6 +18,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+const grayColor = "#808080"
 
 var (
 	modelFlag        string
@@ -45,6 +48,8 @@ func NewRootCmd() *cobra.Command {
 }
 
 func runAsk(question string) error {
+	startTime := time.Now()
+
 	cfgDir, err := config.GetConfigDir()
 	if err != nil {
 		return err
@@ -162,6 +167,7 @@ func runAsk(question string) error {
 		if err := printAnswer(assistantContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
+		printResponseFooter(startTime)
 	}
 
 	if len(toolCalls) > 0 && mcpClient != nil {
@@ -225,6 +231,7 @@ func runAsk(question string) error {
 		if err := printAnswer(secondContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
+		printResponseFooter(startTime)
 	}
 
 	return nil
@@ -279,4 +286,21 @@ func printPlainAnswer(content string) error {
 	}
 
 	return nil
+}
+
+func printResponseFooter(startTime time.Time) {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		width = 80
+	}
+
+	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(grayColor))
+	timingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(grayColor))
+
+	separator := separatorStyle.Render(strings.Repeat("─", width))
+	duration := time.Since(startTime)
+	timing := timingStyle.Render(fmt.Sprintf("Took %.0fms", float64(duration.Milliseconds())))
+
+	os.Stdout.WriteString("\n" + separator + "\n")
+	os.Stdout.WriteString(timing + "\n")
 }
