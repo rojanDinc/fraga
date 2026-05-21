@@ -306,7 +306,7 @@ func printResponseFooter(startTime time.Time, inputTokens int, outputTokens int,
 	separator := separatorStyle.Render(strings.Repeat("─", width))
 
 	duration := time.Since(startTime)
-	timing := fmt.Sprintf("Took %.0fms", float64(duration.Milliseconds()))
+	timing := "Took " + duration.Round(time.Millisecond).String()
 	totalTokens := inputTokens + outputTokens
 	contextStr := formatTokens(totalTokens)
 
