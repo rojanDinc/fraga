@@ -171,7 +171,7 @@ func runAsk(question string) error {
 		if err := printAnswer(assistantContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
-		printResponseFooter(startTime, totalInputTokens, totalOutputTokens)
+		printResponseFooter(startTime, totalInputTokens, totalOutputTokens, providerName, model)
 	}
 
 	if len(toolCalls) > 0 && mcpClient != nil {
@@ -237,7 +237,7 @@ func runAsk(question string) error {
 		if err := printAnswer(secondContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
-		printResponseFooter(startTime, totalInputTokens, totalOutputTokens)
+		printResponseFooter(startTime, totalInputTokens, totalOutputTokens, providerName, model)
 	}
 
 	return nil
@@ -294,7 +294,7 @@ func printPlainAnswer(content string) error {
 	return nil
 }
 
-func printResponseFooter(startTime time.Time, inputTokens int, outputTokens int) {
+func printResponseFooter(startTime time.Time, inputTokens int, outputTokens int, provider string, model string) {
 	width, _, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
 		width = 80
@@ -310,7 +310,7 @@ func printResponseFooter(startTime time.Time, inputTokens int, outputTokens int)
 	totalTokens := inputTokens + outputTokens
 	contextStr := formatTokens(totalTokens)
 
-	metadata := metadataStyle.Render(fmt.Sprintf("%s • Ctx: %s", timing, contextStr))
+	metadata := metadataStyle.Render(fmt.Sprintf("%s • Ctx: %s • Model: %s/%s", timing, contextStr, provider, model))
 
 	os.Stdout.WriteString("\n" + separator + "\n")
 	os.Stdout.WriteString(metadata + "\n")
