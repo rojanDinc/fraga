@@ -25,8 +25,10 @@ type ToolCall struct {
 }
 
 type ChatResult struct {
-	Content   string
-	ToolCalls []ToolCall
+	Content      string
+	ToolCalls    []ToolCall
+	InputTokens  int
+	OutputTokens int
 }
 
 type Provider interface {

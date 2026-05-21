@@ -138,6 +138,8 @@ func runAsk(question string) error {
 
 	var assistantContent strings.Builder
 	var toolCalls []llm.ToolCall
+	var totalInputTokens int
+	var totalOutputTokens int
 
 	// Phase 1: Get the first response from the LLM
 	err = spinner.New().
@@ -154,6 +156,8 @@ func runAsk(question string) error {
 
 			assistantContent.WriteString(result.Content)
 			toolCalls = result.ToolCalls
+			totalInputTokens += result.InputTokens
+			totalOutputTokens += result.OutputTokens
 
 			return nil
 		}).
@@ -167,7 +171,7 @@ func runAsk(question string) error {
 		if err := printAnswer(assistantContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
-		printResponseFooter(startTime)
+		printResponseFooter(startTime, totalInputTokens, totalOutputTokens)
 	}
 
 	if len(toolCalls) > 0 && mcpClient != nil {
@@ -219,6 +223,8 @@ func runAsk(question string) error {
 				}
 
 				secondContent.WriteString(result.Content)
+				totalInputTokens += result.InputTokens
+				totalOutputTokens += result.OutputTokens
 
 				return nil
 			}).
@@ -231,7 +237,7 @@ func runAsk(question string) error {
 		if err := printAnswer(secondContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
-		printResponseFooter(startTime)
+		printResponseFooter(startTime, totalInputTokens, totalOutputTokens)
 	}
 
 	return nil
@@ -288,19 +294,34 @@ func printPlainAnswer(content string) error {
 	return nil
 }
 
-func printResponseFooter(startTime time.Time) {
+func printResponseFooter(startTime time.Time, inputTokens int, outputTokens int) {
 	width, _, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
 		width = 80
 	}
 
-	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(grayColor))
-	timingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(grayColor))
+	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	metadataStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 	separator := separatorStyle.Render(strings.Repeat("─", width))
+
 	duration := time.Since(startTime)
-	timing := timingStyle.Render(fmt.Sprintf("Took %.0fms", float64(duration.Milliseconds())))
+	timing := fmt.Sprintf("Took %.0fms", float64(duration.Milliseconds()))
+	totalTokens := inputTokens + outputTokens
+	contextStr := formatTokens(totalTokens)
+
+	metadata := metadataStyle.Render(fmt.Sprintf("%s • Ctx: %s", timing, contextStr))
 
 	os.Stdout.WriteString("\n" + separator + "\n")
-	os.Stdout.WriteString(timing + "\n")
+	os.Stdout.WriteString(metadata + "\n")
+}
+
+func formatTokens(n int) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d tokens", n)
+	}
+	if n < 1000000 {
+		return fmt.Sprintf("%.1fk tokens", float64(n)/1000)
+	}
+	return fmt.Sprintf("%.1fm tokens", float64(n)/1000000)
 }

@@ -93,7 +93,9 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []Message, tools []T
 	}
 
 	return ChatResult{
-		Content:   msg.Content,
-		ToolCalls: toolCalls,
+		Content:      msg.Content,
+		ToolCalls:    toolCalls,
+		InputTokens:  int(completion.Usage.PromptTokens),
+		OutputTokens: int(completion.Usage.CompletionTokens),
 	}, nil
 }
