@@ -102,7 +102,9 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 	}
 
 	return ChatResult{
-		Content:   content.String(),
-		ToolCalls: toolCalls,
+		Content:      content.String(),
+		ToolCalls:    toolCalls,
+		InputTokens:  int(resp.Usage.InputTokens),
+		OutputTokens: int(resp.Usage.OutputTokens),
 	}, nil
 }

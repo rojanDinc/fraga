@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/huh/spinner"
@@ -17,6 +18,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+const grayColor = "#808080"
 
 var (
 	modelFlag        string
@@ -45,6 +48,8 @@ func NewRootCmd() *cobra.Command {
 }
 
 func runAsk(question string) error {
+	startTime := time.Now()
+
 	cfgDir, err := config.GetConfigDir()
 	if err != nil {
 		return err
@@ -133,6 +138,8 @@ func runAsk(question string) error {
 
 	var assistantContent strings.Builder
 	var toolCalls []llm.ToolCall
+	var totalInputTokens int
+	var totalOutputTokens int
 
 	// Phase 1: Get the first response from the LLM
 	err = spinner.New().
@@ -149,6 +156,8 @@ func runAsk(question string) error {
 
 			assistantContent.WriteString(result.Content)
 			toolCalls = result.ToolCalls
+			totalInputTokens += result.InputTokens
+			totalOutputTokens += result.OutputTokens
 
 			return nil
 		}).
@@ -162,6 +171,7 @@ func runAsk(question string) error {
 		if err := printAnswer(assistantContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
+		printResponseFooter(startTime, totalInputTokens, totalOutputTokens, providerName, model)
 	}
 
 	if len(toolCalls) > 0 && mcpClient != nil {
@@ -213,6 +223,8 @@ func runAsk(question string) error {
 				}
 
 				secondContent.WriteString(result.Content)
+				totalInputTokens += result.InputTokens
+				totalOutputTokens += result.OutputTokens
 
 				return nil
 			}).
@@ -225,6 +237,7 @@ func runAsk(question string) error {
 		if err := printAnswer(secondContent.String(), settings.ShouldRenderMarkdown()); err != nil {
 			slog.Error("failed to print answer", "err", err)
 		}
+		printResponseFooter(startTime, totalInputTokens, totalOutputTokens, providerName, model)
 	}
 
 	return nil
@@ -279,4 +292,36 @@ func printPlainAnswer(content string) error {
 	}
 
 	return nil
+}
+
+func printResponseFooter(startTime time.Time, inputTokens int, outputTokens int, provider string, model string) {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		width = 80
+	}
+
+	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	metadataStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+
+	separator := separatorStyle.Render(strings.Repeat("─", width))
+
+	duration := time.Since(startTime)
+	timing := "Took " + duration.Round(time.Millisecond).String()
+	totalTokens := inputTokens + outputTokens
+	contextStr := formatTokens(totalTokens)
+
+	metadata := metadataStyle.Render(fmt.Sprintf("%s • Ctx: %s • Model: %s/%s", timing, contextStr, provider, model))
+
+	os.Stdout.WriteString("\n" + separator + "\n")
+	os.Stdout.WriteString(metadata + "\n")
+}
+
+func formatTokens(n int) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d tokens", n)
+	}
+	if n < 1000000 {
+		return fmt.Sprintf("%.1fk tokens", float64(n)/1000)
+	}
+	return fmt.Sprintf("%.1fm tokens", float64(n)/1000000)
 }
