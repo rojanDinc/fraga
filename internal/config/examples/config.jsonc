@@ -1,44 +1,54 @@
 {
-	// Provider to use (openai, anthropic, openrouter)
-	"provider": "openai",
+	// Provider to use (must match a name in the providers map)
+	"provider": "my-openai",
 
 	// Model to use for all requests
 	// You can override this per-request with the --model flag
 	"model": "gpt-4o",
 
 	// Provider configuration
-	// Add at least one provider below
+	// Define any number of providers, each with a type of "openai" or "anthropic"
+	// You can have multiple providers of the same type (e.g. OpenAI + OpenRouter via base_url)
+	// API keys can reference environment variables with the ${VAR} syntax,
+	// e.g. "api_key": "${MY_OPENAI_API_KEY}"
+	// api_key is optional: omit it to use the OPENAI_API_KEY/ANTHROPIC_API_KEY
+	// environment variable, or to talk to keyless local servers (e.g. Ollama)
 	"providers": {
-		// OpenAI configuration
+		// OpenAI-compatible provider
 		// Get your API key from: https://platform.openai.com/api-keys
-		"openai": {
+		"my-openai": {
+			"type": "openai",
 			"api_key": "sk-your-openai-api-key",
 			"base_url": "https://api.openai.com/v1"
 		},
 
-		// Anthropic configuration
-		// Get your API key from: https://console.anthropic.com/settings/keys
-		"anthropic": {
-			"api_key": "sk-ant-your-anthropic-api-key",
-			"base_url": "https://api.anthropic.com"
+		// OpenRouter is OpenAI-compatible, so it can be configured as type "openai"
+		// Get your API key from: https://openrouter.ai/keys
+		// Attribution headers (HTTP-Referer, X-OpenRouter-Title, X-OpenRouter-Categories)
+		// are sent automatically when the base URL points at OpenRouter; override them here if needed
+		"openrouter": {
+			"type": "openai",
+			"api_key": "sk-or-your-openrouter-api-key",
+			"base_url": "https://openrouter.ai/api/v1"
 		},
 
-		/*
-		 * OpenRouter configuration
-		 * Provides access to many models through a single API
-		 * Get your API key from: https://openrouter.ai/keys
-		 */
-		"openrouter": {
-			"api_key": "sk-or-your-openrouter-api-key",
-			"base_url": "https://openrouter.ai/api/v1",
-			"headers": {
-				"X-Custom-Header": "custom-value"
-			}
+		// Anthropic provider
+		// Get your API key from: https://console.anthropic.com/settings/keys
+		"my-anthropic": {
+			"type": "anthropic",
+			"api_key": "sk-ant-your-anthropic-api-key",
+			"base_url": "https://api.anthropic.com"
 		}
 	},
 
 	// Application settings
 	"settings": {
+		// Sampling temperature (number, e.g. 0.7); omit to use the provider default
+		// "temperature": 0.7,
+
+		// Maximum tokens to generate; omit to use the provider default
+		// "max_tokens": 4096,
+
 		// System prompt to use from ~/.config/fraga/system_prompts/
 		// Specify the filename without the .md extension
 		// Leave empty or omit to use the built-in default
@@ -81,10 +91,15 @@
 			}
 		},
 
-		// Remote SSE server example
-		// Connects to a remote MCP server via Server-Sent Events
+		// Remote Streamable HTTP server example
+		// Connects to a remote MCP server via the Streamable HTTP transport
+		// Headers are sent with every request; values can reference environment
+		// variables with the ${VAR} syntax, e.g. "Authorization": "Bearer ${TOKEN}"
 		"remote": {
-			"url": "https://remote-mcp-server.com/sse"
+			"url": "https://remote-mcp-server.com/mcp",
+			"headers": {
+				"Authorization": "Bearer your-token"
+			}
 		}
 	}
 }

@@ -16,28 +16,25 @@ Run `fraga init` to create a default configuration file at `~/.config/fraga/frag
 
 ```jsonc
 {
-  // Default model to use for all requests
-  // For one-shot questions, smaller models like gpt-5.4-nano, claude-haiku, or
-  // gemini-3.1-flash-lite are often sufficient and significantly faster than
-  // larger models.
-  "default_model": "openai/gpt-5.4-nano",
+  // Provider to use (must match a name in the providers map)
+  "provider": "my-openai",
+
+  // Model to use for all requests
+  // You can override this per-request with the --model flag
+  "model": "gpt-4o",
 
   // Provider configuration
+  // Define any number of providers, each with a type of "openai" or "anthropic"
   "providers": {
-    "openai": {
-      "api_key": "",
-      "base_url": "https://api.openai.com/v1",
-      "models": ["gpt-5.4-nano"]
+    "my-openai": {
+      "type": "openai",
+      "api_key": "sk-your-openai-api-key",
+      "base_url": "https://api.openai.com/v1"
     },
-    "anthropic": {
-      "api_key": "",
-      "base_url": "https://api.anthropic.com",
-      "models": ["claude-haiku-4-5"]
-    },
-    "openrouter": {
-      "api_key": "",
-      "base_url": "https://openrouter.ai/api/v1",
-      "models": ["openai/gpt-5.4-nano", "anthropic/claude-haiku-4-5"]
+    "my-anthropic": {
+      "type": "anthropic",
+      "api_key": "sk-ant-your-anthropic-api-key",
+      "base_url": "https://api.anthropic.com"
     }
   },
 
@@ -52,16 +49,42 @@ Run `fraga init` to create a default configuration file at `~/.config/fraga/frag
 }
 ```
 
+### Using OpenRouter
+
+OpenRouter exposes an OpenAI-compatible API, so it can be configured as a provider of type `openai` by pointing the base URL at OpenRouter:
+
+```jsonc
+"providers": {
+  "openrouter": {
+    "type": "openai",
+    "api_key": "${OPENROUTER_API_KEY}",
+    "base_url": "https://openrouter.ai/api/v1"
+  }
+}
+```
+
 ### Environment Variables
 
-Any configuration value can be overridden with environment variables:
+Any provider value can reference an environment variable with the `${VAR}` syntax, which is resolved when the config is loaded. This is the recommended way to keep secrets like API keys out of the config file:
+
+```jsonc
+"providers": {
+  "my-openai": {
+    "type": "openai",
+    "api_key": "${OPENAI_API_KEY}",
+    "base_url": "https://api.openai.com/v1"
+  }
+}
+```
+
+Missing variables expand to an empty string.
+
+Runtime settings can also be overridden via environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `FRAGA_DEFAULT_MODEL` | Default model to use | |
-| `FRAGA_OPENAI_API_KEY` | OpenAI API key | |
-| `FRAGA_ANTHROPIC_API_KEY` | Anthropic API key | |
-| `FRAGA_OPENROUTER_API_KEY` | OpenRouter API key | |
+| `FRAGA_MODEL` | Default model to use | |
+| `FRAGA_PROVIDER` | Provider to use (must match a name in the providers map) | |
 | `FRAGA_TEMPERATURE` | Sampling temperature | 0.3 |
 | `FRAGA_MAX_TOKENS` | Maximum tokens per response | 4096 |
 | `FRAGA_RENDER_MARKDOWN` | Enable markdown rendering | false |
@@ -102,12 +125,19 @@ MCP servers provide tools that the LLM can use to interact with external systems
 }
 ```
 
-### SSE Servers
+### Streamable HTTP Servers
+
+Remote MCP servers using the Streamable HTTP transport:
 
 ```jsonc
 "mcp": {
   "remote": {
-    "url": "https://remote-mcp-server.com/sse"
+    "url": "https://remote-mcp-server.com/mcp",
+    "headers": {
+      "Authorization": "Bearer your-token"
+    }
   }
 }
 ```
+
+`headers` are sent with every request to the remote server. Values can reference environment variables with the `${VAR}` syntax, e.g. `"Authorization": "Bearer ${MCP_TOKEN}"`.

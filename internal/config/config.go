@@ -13,11 +13,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-//go:embed examples/template.jsonc
-var defaultConfigTemplate []byte
-
 //go:embed examples/config.jsonc
-var exampleConfig []byte
+var defaultConfigTemplate []byte
 
 const (
 	ConfigDirName       = "fraga"
@@ -25,31 +22,32 @@ const (
 	ConfigFileNameJSONC = "fraga.jsonc"
 
 	// Default provider URLs
-	DefaultOpenAIBaseURL     = "https://api.openai.com/v1"
-	DefaultAnthropicBaseURL  = "https://api.anthropic.com"
-	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
+	DefaultOpenAIBaseURL    = "https://api.openai.com/v1"
+	DefaultAnthropicBaseURL = "https://api.anthropic.com"
+
+	// configPathHint is the user-facing location of the config file, referenced
+	// in validation error messages.
+	configPathHint = "~/.config/fraga/fraga.json"
 )
 
-var ErrUnknownProvider = errors.New("unknown provider")
+var (
+	ErrUnknownProvider = errors.New("unknown provider")
+	ErrConfigExists    = errors.New("config already exists")
+)
 
 // Config holds the complete Fraga configuration
 type Config struct {
-	Model     string               `json:"model"`
-	Provider  string               `json:"provider"`
-	Providers Providers            `json:"providers"`
-	Settings  Settings             `json:"settings"`
-	MCP       map[string]MCPServer `json:"mcp,omitempty"`
+	Model     string                    `json:"model"`
+	Provider  string                    `json:"provider"`
+	Providers map[string]ProviderConfig `json:"providers"`
+	Settings  Settings                  `json:"settings"`
+	MCP       map[string]MCPServer      `json:"mcp,omitempty"`
 }
 
-// Providers holds configuration for all LLM providers
-type Providers struct {
-	OpenAI     ProviderConfig `json:"openai"`
-	Anthropic  ProviderConfig `json:"anthropic"`
-	OpenRouter ProviderConfig `json:"openrouter"`
-}
-
-// ProviderConfig holds configuration for a single provider
+// ProviderConfig holds configuration for a single provider.
+// The Type field determines which backend is used: "openai" or "anthropic".
 type ProviderConfig struct {
+	Type    string            `json:"type"`
 	APIKey  string            `json:"api_key,omitempty"`
 	BaseURL string            `json:"base_url,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
@@ -57,10 +55,10 @@ type ProviderConfig struct {
 
 // Settings holds application settings
 type Settings struct {
-	Temperature    float64 `json:"temperature"`
-	MaxTokens      int     `json:"max_tokens"`
-	SystemPrompt   string  `json:"system_prompt"`
-	RenderMarkdown *bool   `json:"render_markdown,omitempty"`
+	Temperature    *float64 `json:"temperature,omitempty"`
+	MaxTokens      int      `json:"max_tokens"`
+	SystemPrompt   string   `json:"system_prompt"`
+	RenderMarkdown *bool    `json:"render_markdown,omitempty"`
 }
 
 // ShouldRenderMarkdown returns true if markdown rendering should be enabled.
@@ -70,44 +68,41 @@ func (s Settings) ShouldRenderMarkdown() bool {
 }
 
 // MCPServer holds configuration for an MCP server
+// Headers are sent with every request when using the Streamable HTTP transport
+// (i.e. when URL is set).
 type MCPServer struct {
 	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
 	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
-// Load loads configuration from JSON/JSONC file with environment variable overrides
+// Load loads config with requiring proper configuration set
 func Load(configDir string) (*Config, error) {
-	cfg, err := loadFromFile(configDir)
+	cfg, err := LoadWithoutValidation(configDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("config file not found at ~/.config/fraga/fraga.json or ~/.config/fraga/fraga.jsonc. Run 'fraga init' to create one")
-		}
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, err
 	}
-
-	// Apply environment variable overrides
-	cfg.applyEnvOverrides()
 
 	// Validate that at least one provider is configured
 	if !cfg.hasConfiguredProvider() {
-		return nil, fmt.Errorf("no LLM provider configured. Please add at least one provider to ~/.config/fraga/fraga.json")
+		return nil, fmt.Errorf("no LLM provider configured. Please add at least one provider to %s", configPathHint)
 	}
 
 	// Validate that model is set
 	if cfg.Model == "" {
-		return nil, fmt.Errorf("model is not set in config. Please set it in ~/.config/fraga/fraga.json")
+		return nil, fmt.Errorf("model is not set in config. Please set it in %s", configPathHint)
 	}
 
 	// Validate that provider is set
 	if cfg.Provider == "" {
-		return nil, fmt.Errorf("provider is not set in config. Please set it in ~/.config/fraga/fraga.json")
+		return nil, fmt.Errorf("provider is not set in config. Please set it in %s", configPathHint)
 	}
 
-	// Validate provider name
-	if err := isValidProvider(cfg.Provider); err != nil {
-		return nil, fmt.Errorf("invalid provider: %s", cfg.Provider)
+	// Validate provider name and type
+	if err := cfg.isValidProvider(cfg.Provider); err != nil {
+		return nil, fmt.Errorf("invalid provider: %s", err)
 	}
 
 	return cfg, nil
@@ -149,6 +144,9 @@ func loadFromFile(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// Resolve ${VAR} references to environment variables in provider values
+	cfg.expandEnvVars()
+
 	return &cfg, nil
 }
 
@@ -163,32 +161,10 @@ func (c *Config) applyEnvOverrides() {
 		c.Provider = val
 	}
 
-	// Override providers
-	if val := os.Getenv("FRAGA_OPENAI_API_KEY"); val != "" {
-		c.Providers.OpenAI.APIKey = val
-	}
-	if val := os.Getenv("FRAGA_OPENAI_BASE_URL"); val != "" {
-		c.Providers.OpenAI.BaseURL = val
-	}
-
-	if val := os.Getenv("FRAGA_ANTHROPIC_API_KEY"); val != "" {
-		c.Providers.Anthropic.APIKey = val
-	}
-	if val := os.Getenv("FRAGA_ANTHROPIC_BASE_URL"); val != "" {
-		c.Providers.Anthropic.BaseURL = val
-	}
-
-	if val := os.Getenv("FRAGA_OPENROUTER_API_KEY"); val != "" {
-		c.Providers.OpenRouter.APIKey = val
-	}
-	if val := os.Getenv("FRAGA_OPENROUTER_BASE_URL"); val != "" {
-		c.Providers.OpenRouter.BaseURL = val
-	}
-
 	// Override settings
 	if val := os.Getenv("FRAGA_TEMPERATURE"); val != "" {
 		if f, err := strconv.ParseFloat(val, 64); err == nil {
-			c.Settings.Temperature = f
+			c.Settings.Temperature = &f
 		}
 	}
 	if val := os.Getenv("FRAGA_MAX_TOKENS"); val != "" {
@@ -204,18 +180,45 @@ func (c *Config) applyEnvOverrides() {
 }
 
 func (c *Config) hasConfiguredProvider() bool {
-	return c.Providers.OpenAI.APIKey != "" ||
-		c.Providers.Anthropic.APIKey != "" ||
-		c.Providers.OpenRouter.APIKey != ""
+	return len(c.Providers) > 0
 }
 
-func isValidProvider(provider string) error {
-	switch provider {
-	case "openai", "anthropic", "openrouter":
+func (c *Config) isValidProvider(name string) error {
+	provider, ok := c.Providers[name]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrUnknownProvider, name)
+	}
+
+	switch provider.Type {
+	case "openai", "anthropic":
 		return nil
 	default:
-		return fmt.Errorf("%w: %s", ErrUnknownProvider, provider)
+		return fmt.Errorf("%w: provider %q has invalid type %q (must be openai or anthropic)", ErrUnknownProvider, name, provider.Type)
 	}
+}
+
+// expandEnvVars resolves ${VAR} references to environment variables in
+// provider configuration values. Missing variables expand to an empty string.
+func (c *Config) expandEnvVars() {
+	for name, provider := range c.Providers {
+		provider.APIKey = expandEnvString(provider.APIKey)
+		provider.BaseURL = expandEnvString(provider.BaseURL)
+		for k, v := range provider.Headers {
+			provider.Headers[k] = expandEnvString(v)
+		}
+		c.Providers[name] = provider
+	}
+
+	for name, server := range c.MCP {
+		for k, v := range server.Headers {
+			server.Headers[k] = expandEnvString(v)
+		}
+		c.MCP[name] = server
+	}
+}
+
+func expandEnvString(s string) string {
+	return os.Expand(s, os.Getenv)
 }
 
 func GetConfigDir() (string, error) {
@@ -227,15 +230,21 @@ func GetConfigDir() (string, error) {
 }
 
 func getConfigPath(configDir string) (string, error) {
-	// Check for .jsonc first (preferred for new configs with comments)
-	jsoncPath := filepath.Join(configDir, ConfigFileNameJSONC)
-	if _, err := os.Stat(jsoncPath); err == nil {
-		return jsoncPath, nil
+	// Prefer .jsonc for new configs with comments, falling back to .json.
+	if ok, path := existingConfigPath(configDir); ok {
+		return path, nil
 	}
+	return filepath.Join(configDir, ConfigFileName), nil
+}
 
-	// Fall back to .json
-	jsonPath := filepath.Join(configDir, ConfigFileName)
-	return jsonPath, nil
+func existingConfigPath(configDir string) (bool, string) {
+	for _, name := range []string{ConfigFileNameJSONC, ConfigFileName} {
+		path := filepath.Join(configDir, name)
+		if _, err := os.Stat(path); err == nil {
+			return true, path
+		}
+	}
+	return false, ""
 }
 
 // InitDefault creates a default config file with helpful comments
@@ -249,12 +258,8 @@ func InitDefault() error {
 	configPath := filepath.Join(configDir, ConfigFileNameJSONC)
 
 	// Check if config already exists (check both .json and .jsonc)
-	if _, err := os.Stat(configPath); err == nil {
-		return fmt.Errorf("config already exists at %s", configPath)
-	}
-	jsonPath := filepath.Join(configDir, ConfigFileName)
-	if _, err := os.Stat(jsonPath); err == nil {
-		return fmt.Errorf("config already exists at %s", jsonPath)
+	if ok, path := existingConfigPath(configDir); ok {
+		return fmt.Errorf("%w at %s", ErrConfigExists, path)
 	}
 
 	// Create config directory

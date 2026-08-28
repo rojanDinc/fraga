@@ -13,8 +13,8 @@ import (
 const systemPromptsDirName = "system_prompts"
 
 type systemPromptMatter struct {
-	Temperature float64 `yaml:"temperature"`
-	MaxTokens   int     `yaml:"max_tokens"`
+	Temperature *float64 `yaml:"temperature"`
+	MaxTokens   int      `yaml:"max_tokens"`
 }
 
 //go:embed default_system_prompt.md
@@ -22,7 +22,7 @@ var defaultSystemPromptContent string
 
 type SystemPrompt struct {
 	Content     string
-	Temperature float64
+	Temperature *float64
 	MaxTokens   int
 }
 

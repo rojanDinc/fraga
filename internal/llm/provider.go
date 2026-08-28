@@ -7,9 +7,15 @@ import (
 	"github.com/rojanDinc/fraga/internal/config"
 )
 
+// Message is a single message in a conversation. The fields used depend on
+// the role: system/user messages use Content; assistant messages may carry
+// Content and/or ToolCalls; tool messages carry the result of a single tool
+// call identified by ToolCallID.
 type Message struct {
-	Role    string
-	Content string
+	Role       string
+	Content    string
+	ToolCalls  []ToolCall
+	ToolCallID string
 }
 
 type Tool struct {
@@ -37,23 +43,17 @@ type Provider interface {
 }
 
 func NewProvider(cfg *config.Config, providerName string, model string) (Provider, error) {
-	switch providerName {
+	providerConfig, ok := cfg.Providers[providerName]
+	if !ok {
+		return nil, fmt.Errorf("provider %q not found in config", providerName)
+	}
+
+	switch providerConfig.Type {
 	case "openai":
-		if cfg.Providers.OpenAI.APIKey == "" {
-			return nil, fmt.Errorf("the OpenAI provider not configured")
-		}
-		return NewOpenAIProvider(&cfg.Providers.OpenAI, model), nil
+		return NewOpenAIProvider(&providerConfig, model), nil
 	case "anthropic":
-		if cfg.Providers.Anthropic.APIKey == "" {
-			return nil, fmt.Errorf("the Anthropic provider not configured")
-		}
-		return NewAnthropicProvider(&cfg.Providers.Anthropic, model), nil
-	case "openrouter":
-		if cfg.Providers.OpenRouter.APIKey == "" {
-			return nil, fmt.Errorf("the OpenRouter provider not configured")
-		}
-		return NewOpenRouterProvider(&cfg.Providers.OpenRouter, model), nil
+		return NewAnthropicProvider(&providerConfig, model), nil
 	default:
-		return nil, fmt.Errorf("unknown provider: %s", providerName)
+		return nil, fmt.Errorf("provider %q has unknown type %q (must be openai or anthropic)", providerName, providerConfig.Type)
 	}
 }

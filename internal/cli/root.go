@@ -5,21 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/huh/spinner"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/rojanDinc/fraga/internal/config"
 	"github.com/rojanDinc/fraga/internal/llm"
 	"github.com/rojanDinc/fraga/internal/mcp"
+	"github.com/rojanDinc/fraga/internal/tui"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
-const grayColor = "#808080"
+// TODO: Make this configurable
+// maxToolIterations bounds the chat/tool-call loop to prevent infinite
+// back-and-forth when a model keeps requesting tools.
+const maxToolIterations = 5
 
 var (
 	modelFlag        string
@@ -34,7 +33,7 @@ func NewRootCmd() *cobra.Command {
 		Long:  `Fraga is a CLI tool for asking one-shot questions to LLMs with MCP tool support.`,
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAsk(strings.Join(args, " "))
+			return runAsk(cmd.Context(), strings.Join(args, " "))
 		},
 	}
 
@@ -47,7 +46,7 @@ func NewRootCmd() *cobra.Command {
 	return cmd
 }
 
-func runAsk(question string) error {
+func runAsk(ctx context.Context, question string) error {
 	startTime := time.Now()
 
 	cfgDir, err := config.GetConfigDir()
@@ -70,10 +69,6 @@ func runAsk(question string) error {
 		providerName = providerFlag
 	}
 
-	if providerName != "openai" && providerName != "anthropic" && providerName != "openrouter" {
-		return fmt.Errorf("invalid provider: %q (must be openai, anthropic, or openrouter)", providerName)
-	}
-
 	provider, err := llm.NewProvider(cfg, providerName, model)
 	if err != nil {
 		return err
@@ -81,6 +76,8 @@ func runAsk(question string) error {
 
 	var mcpClient *mcp.Client
 	var llmTools []llm.Tool
+	toolServers := make(map[string]string)
+
 	if len(cfg.MCP) > 0 {
 		mcpClient, err = mcp.New(cfg.MCP)
 		if err != nil {
@@ -88,12 +85,16 @@ func runAsk(question string) error {
 		}
 		defer mcpClient.Close()
 
-		tools, err := mcpClient.ListTools(context.Background())
+		tools, err := mcpClient.ListTools(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list MCP tools: %w", err)
 		}
 
 		for _, tool := range tools {
+			if existing, ok := toolServers[tool.Name]; ok {
+				return fmt.Errorf("tool %q is exposed by both MCP servers %q and %q; rename one of them", tool.Name, existing, tool.Server)
+			}
+			toolServers[tool.Name] = tool.Server
 			llmTools = append(llmTools, llm.Tool{
 				Name:        tool.Name,
 				Description: tool.Description,
@@ -111,24 +112,36 @@ func runAsk(question string) error {
 			return err
 		}
 		systemPromptContent = sp.Content
-		settings.Temperature = sp.Temperature
-		settings.MaxTokens = sp.MaxTokens
+		if sp.Temperature != nil {
+			settings.Temperature = sp.Temperature
+		}
+		if sp.MaxTokens > 0 {
+			settings.MaxTokens = sp.MaxTokens
+		}
 	} else if cfg.Settings.SystemPrompt != "" {
 		sp, err := config.LoadSystemPrompt(cfg.Settings.SystemPrompt)
 		if err != nil {
 			return err
 		}
 		systemPromptContent = sp.Content
-		settings.Temperature = sp.Temperature
-		settings.MaxTokens = sp.MaxTokens
+		if sp.Temperature != nil {
+			settings.Temperature = sp.Temperature
+		}
+		if sp.MaxTokens > 0 {
+			settings.MaxTokens = sp.MaxTokens
+		}
 	} else {
 		sp, err := config.GetDefaultSystemPrompt()
 		if err != nil {
 			return err
 		}
 		systemPromptContent = sp.Content
-		settings.Temperature = sp.Temperature
-		settings.MaxTokens = sp.MaxTokens
+		if sp.Temperature != nil {
+			settings.Temperature = sp.Temperature
+		}
+		if sp.MaxTokens > 0 {
+			settings.MaxTokens = sp.MaxTokens
+		}
 	}
 
 	messages := []llm.Message{
@@ -136,192 +149,91 @@ func runAsk(question string) error {
 		{Role: "user", Content: question},
 	}
 
-	var assistantContent strings.Builder
-	var toolCalls []llm.ToolCall
 	var totalInputTokens int
 	var totalOutputTokens int
 
-	// Phase 1: Get the first response from the LLM
-	err = spinner.New().
-		Title("Preparing an answer...").
-		Style(
-			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#ff8b42")),
-		).
-		ActionWithErr(func(ctx context.Context) error {
-			result, err := provider.Chat(ctx, messages, llmTools, settings)
+	for iteration := 0; iteration < maxToolIterations; iteration++ {
+		var result llm.ChatResult
+
+		err = tui.Spinner("Preparing an answer...", func(ctx context.Context) error {
+			var err error
+			result, err = provider.Chat(ctx, messages, llmTools, settings)
 			if err != nil {
-				return fmt.Errorf("failed to start chat: %w", err)
+				return fmt.Errorf("failed to chat: %w", err)
 			}
-
-			assistantContent.WriteString(result.Content)
-			toolCalls = result.ToolCalls
-			totalInputTokens += result.InputTokens
-			totalOutputTokens += result.OutputTokens
-
 			return nil
-		}).
-		Run()
-	if err != nil {
-		return err
-	}
-
-	// Render markdown for the first response if no tool calls
-	if len(toolCalls) == 0 {
-		if err := printAnswer(assistantContent.String(), settings.ShouldRenderMarkdown()); err != nil {
-			slog.Error("failed to print answer", "err", err)
+		})
+		if err != nil {
+			return err
 		}
-		printResponseFooter(startTime, totalInputTokens, totalOutputTokens, providerName, model)
-	}
 
-	if len(toolCalls) > 0 && mcpClient != nil {
-		toolResults := make(map[string]*mcp.ToolResult)
+		totalInputTokens += result.InputTokens
+		totalOutputTokens += result.OutputTokens
 
-		// Phase 2: Call MCP tools
-		err = spinner.New().
-			Title("Preparing an answer...").
-			ActionWithErr(func(ctx context.Context) error {
-				for _, tc := range toolCalls {
-					var args map[string]any
-					if tc.Arguments != "" {
-						if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
-							return fmt.Errorf("failed to parse tool arguments: %w", err)
-						}
+		if len(result.ToolCalls) == 0 {
+			if err := tui.PrintAnswer(result.Content, settings.ShouldRenderMarkdown()); err != nil {
+				slog.Error("failed to print answer", "err", err)
+			}
+			tui.Footer(time.Since(startTime), totalInputTokens, totalOutputTokens, providerName, model)
+			return nil
+		}
+
+		if mcpClient == nil {
+			return fmt.Errorf("model requested tool calls but no MCP servers are configured")
+		}
+
+		messages = append(messages, llm.Message{
+			Role:      "assistant",
+			Content:   result.Content,
+			ToolCalls: result.ToolCalls,
+		})
+
+		err = tui.ToolSpinner(func(ctx context.Context) error {
+			for _, tc := range result.ToolCalls {
+				var args map[string]any
+				if tc.Arguments != "" {
+					if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
+						return fmt.Errorf("failed to parse arguments for tool %s: %w", tc.Name, err)
 					}
-
-					result, err := mcpClient.CallTool(ctx, findServerForTool(cfg.MCP, tc.Name), tc.Name, args)
-					if err != nil {
-						return fmt.Errorf("failed to call tool %s: %w", tc.Name, err)
-					}
-					toolResults[tc.Name] = result
 				}
 
-				return nil
-			}).
-			Run()
-		if err != nil {
-			return err
-		}
+				server, ok := toolServers[tc.Name]
+				if !ok {
+					return fmt.Errorf("no MCP server exposes tool %q", tc.Name)
+				}
 
-		messages = append(messages, llm.Message{Role: "assistant", Content: assistantContent.String()})
-
-		resultJSON, err := json.Marshal(toolResults)
-		if err != nil {
-			return err
-		}
-		messages = append(messages, llm.Message{Role: "user", Content: string(resultJSON)})
-
-		var secondContent strings.Builder
-
-		// Phase 3: Get the second response after tool results
-		err = spinner.New().
-			Title("Preparing an answer...").
-			ActionWithErr(func(ctx context.Context) error {
-				result, err := provider.Chat(ctx, messages, llmTools, settings)
+				toolResult, err := mcpClient.CallTool(ctx, server, tc.Name, args)
 				if err != nil {
-					return fmt.Errorf("failed to continue chat: %w", err)
+					return fmt.Errorf("failed to call tool %s: %w", tc.Name, err)
 				}
 
-				secondContent.WriteString(result.Content)
-				totalInputTokens += result.InputTokens
-				totalOutputTokens += result.OutputTokens
+				content, err := toolResultContent(toolResult)
+				if err != nil {
+					return fmt.Errorf("failed to serialize result of tool %s: %w", tc.Name, err)
+				}
 
-				return nil
-			}).
-			Run()
+				messages = append(messages, llm.Message{
+					Role:       "tool",
+					Content:    content,
+					ToolCallID: tc.ID,
+				})
+			}
+			return nil
+		})
 		if err != nil {
 			return err
 		}
-
-		// Render markdown for the second response
-		if err := printAnswer(secondContent.String(), settings.ShouldRenderMarkdown()); err != nil {
-			slog.Error("failed to print answer", "err", err)
-		}
-		printResponseFooter(startTime, totalInputTokens, totalOutputTokens, providerName, model)
 	}
 
-	return nil
+	return fmt.Errorf("exceeded %d tool call iterations", maxToolIterations)
 }
 
-// TODO: Fix this function
-func findServerForTool(servers map[string]config.MCPServer, toolName string) string {
-	for name := range servers {
-		return name
-	}
-	return ""
-}
-
-func printAnswer(content string, printPretty bool) error {
-	content = strings.TrimSpace(content)
-	if printPretty {
-		return printPrettyAnswer(content)
-	}
-
-	return printPlainAnswer(content)
-}
-
-func printPrettyAnswer(content string) error {
-	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+// toolResultContent serializes an MCP tool result to a plain string for the
+// follow-up chat message.
+func toolResultContent(result *mcp.ToolResult) (string, error) {
+	data, err := json.Marshal(result)
 	if err != nil {
-		width = 80
+		return "", err
 	}
-
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create glamour renderer: %w", err)
-	}
-
-	out, err := renderer.Render(content)
-	if err != nil {
-		return err
-	}
-
-	if _, err := os.Stdout.WriteString(out); err != nil {
-		slog.Error("failed to write output", "error", err)
-	}
-
-	return nil
-}
-
-func printPlainAnswer(content string) error {
-	if _, err := os.Stdout.WriteString(content); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func printResponseFooter(startTime time.Time, inputTokens int, outputTokens int, provider string, model string) {
-	width, _, err := term.GetSize(int(os.Stdout.Fd()))
-	if err != nil {
-		width = 80
-	}
-
-	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	metadataStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-
-	separator := separatorStyle.Render(strings.Repeat("─", width))
-
-	duration := time.Since(startTime)
-	timing := "Took " + duration.Round(time.Millisecond).String()
-	totalTokens := inputTokens + outputTokens
-	contextStr := formatTokens(totalTokens)
-
-	metadata := metadataStyle.Render(fmt.Sprintf("%s • Ctx: %s • Model: %s/%s", timing, contextStr, provider, model))
-
-	os.Stdout.WriteString("\n" + separator + "\n")
-	os.Stdout.WriteString(metadata + "\n")
-}
-
-func formatTokens(n int) string {
-	if n < 1000 {
-		return fmt.Sprintf("%d tokens", n)
-	}
-	if n < 1000000 {
-		return fmt.Sprintf("%.1fk tokens", float64(n)/1000)
-	}
-	return fmt.Sprintf("%.1fm tokens", float64(n)/1000000)
+	return string(data), nil
 }
