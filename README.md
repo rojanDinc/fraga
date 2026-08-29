@@ -15,21 +15,50 @@ go install github.com/rojanDinc/fraga@latest
 
 Run `fraga init` to create a default configuration file at `~/.config/fraga/fraga.jsonc`.
 
-### Using OpenRouter
+Check the example [config](./internal/config/examples/config.jsonc) file for a full example.
 
-OpenRouter exposes an OpenAI-compatible API, so it can be configured as a provider of type `openai` by pointing the base URL at OpenRouter:
+### Adding a Provider
+
+Each provider has a `type` of `openai` or `anthropic`. Add as many named providers as you need; the `provider` setting selects which one is used.
+
+#### OpenAI-Compatible Providers
+
+Point `base_url` at any OpenAI-compatible endpoint, such as the official OpenAI API, OpenRouter, or a local server like LM Studio:
 
 ```jsonc
 "providers": {
-  "openrouter": {
+  "my-openai": {
     "type": "openai",
-    "api_key": "${OPENROUTER_API_KEY}",
-    "base_url": "https://openrouter.ai/api/v1"
+    "api_key": "sk-your-openai-api-key",
+    "base_url": "https://api.openai.com/v1"
   }
 }
 ```
 
-### Environment Variables
+or to use local AI (LM Studio):
+
+```jsonc
+"providers": {
+  "local": {
+    "type": "openai",
+    "base_url": "https://localhost:1234/v1"
+  }
+}
+```
+
+#### Anthropic-Compatible Providers
+
+```jsonc
+"providers": {
+  "my-anthropic": {
+    "type": "anthropic",
+    "api_key": "sk-ant-your-anthropic-api-key",
+    "base_url": "https://api.anthropic.com"
+  }
+}
+```
+
+#### Environment Variables
 
 Any provider value can reference an environment variable with the `${VAR}` syntax, which is resolved when the config is loaded. This is the recommended way to keep secrets like API keys out of the config file:
 
@@ -43,7 +72,7 @@ Any provider value can reference an environment variable with the `${VAR}` synta
 }
 ```
 
-Missing variables expand to an empty string.
+`api_key` is optional: omit it to use the standard `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` environment variable, or to talk to keyless local servers. Missing variables expand to an empty string.
 
 Runtime settings can also be overridden via environment variables:
 
