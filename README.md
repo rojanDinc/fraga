@@ -1,5 +1,4 @@
 # Fraga
-<p align="center"><img width="400" alt="Fraga logo" src="docs/images/full_logo.png" /></p>
 
 <p align="center">Fraga (Fråga in Swedish) translates to "question" in English<br />is a CLI tool for asking one-shot questions to LLMs.</p>
 
