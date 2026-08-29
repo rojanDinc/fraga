@@ -1,6 +1,9 @@
 # Fraga
+<p align="center"><img width="400" alt="Fraga logo" src="docs/images/full_logo.png" /></p>
 
-Fraga (Fråga in Swedish) translates to "question" in English is a CLI tool for asking one-shot questions to LLMs with MCP (Model Context Protocol) tool support.
+<p align="center">Fraga (Fråga in Swedish) translates to "question" in English<br />is a CLI tool for asking one-shot questions to LLMs.</p>
+
+<p align="center"><img width="800" alt="Fraga demo" src="docs/images/demo.gif" /></p>
 
 ## Installation
 
@@ -11,43 +14,6 @@ go install github.com/rojanDinc/fraga@latest
 ## Configuration
 
 Run `fraga init` to create a default configuration file at `~/.config/fraga/fraga.jsonc`.
-
-### Configuration File
-
-```jsonc
-{
-  // Provider to use (must match a name in the providers map)
-  "provider": "my-openai",
-
-  // Model to use for all requests
-  // You can override this per-request with the --model flag
-  "model": "gpt-4o",
-
-  // Provider configuration
-  // Define any number of providers, each with a type of "openai" or "anthropic"
-  "providers": {
-    "my-openai": {
-      "type": "openai",
-      "api_key": "sk-your-openai-api-key",
-      "base_url": "https://api.openai.com/v1"
-    },
-    "my-anthropic": {
-      "type": "anthropic",
-      "api_key": "sk-ant-your-anthropic-api-key",
-      "base_url": "https://api.anthropic.com"
-    }
-  },
-
-  "settings": {
-    "temperature": 0.3,
-    "max_tokens": 4096,
-    "system_prompt": "",
-    "render_markdown": true
-  },
-
-  "mcp": {}
-}
-```
 
 ### Using OpenRouter
 
@@ -94,7 +60,7 @@ Runtime settings can also be overridden via environment variables:
 Ask a question:
 
 ```bash
-fraga "Show me a kubernetes deployment manifest example"
+fraga Show me a kubernetes deployment manifest example
 ```
 
 Use a specific model:
@@ -140,4 +106,4 @@ Remote MCP servers using the Streamable HTTP transport:
 }
 ```
 
-`headers` are sent with every request to the remote server. Values can reference environment variables with the `${VAR}` syntax, e.g. `"Authorization": "Bearer ${MCP_TOKEN}"`.
+Values can reference environment variables with the `${VAR}` syntax, e.g. `"Authorization": "Bearer ${MCP_TOKEN}"`.
