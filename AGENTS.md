@@ -125,15 +125,17 @@ import (
 ```go
 // Use struct tags for configuration
 type Config struct {
-    DefaultModel string               `envconfig:"default_model" default:"gpt-4o"`
-    Providers    Providers            `envconfig:"-"`
+    Model     string                    `json:"model"`
+    Provider  string                    `json:"provider"`
+    Providers map[string]ProviderConfig `json:"providers"`
 }
 
 // Group related fields
 type ProviderConfig struct {
-    APIKey  string   `envconfig:"api_key"`
-    BaseURL string   `envconfig:"base_url"`
-    Models  []string `envconfig:"models"`
+    Type    string            `json:"type"`
+    APIKey  string            `json:"api_key"`
+    BaseURL string            `json:"base_url"`
+    Headers map[string]string `json:"headers"`
 }
 ```
 
@@ -208,7 +210,7 @@ func TestLoad(t *testing.T) {
         {
             name: "valid config",
             envVars: map[string]string{
-                "FRAGA_OPENAI_API_KEY": "test-key",
+                "MY_OPENAI_API_KEY": "test-key",
             },
             wantErr: false,
         },
@@ -238,7 +240,6 @@ internal/
     provider.go       # Interface definition
     openai.go
     anthropic.go
-    openrouter.go
   mcp/                # MCP client
     client.go
 go.mod
@@ -252,21 +253,22 @@ Key dependencies to be familiar with:
 - `github.com/kelseyhightower/envconfig` - Environment configuration
 - `github.com/openai/openai-go` - OpenAI SDK
 - `github.com/anthropics/anthropic-sdk-go` - Anthropic SDK
-- `github.com/mark3labs/mcp-go` - MCP client
+- `github.com/modelcontextprotocol/go-sdk` - MCP client
 
 ## Configuration
 
-Configuration is environment-based using envconfig:
-- Prefix: `FRAGA_`
-- Format: `FRAGA_SECTION_FIELD` (e.g., `FRAGA_OPENAI_API_KEY`)
-- MCP servers configured in `~/.config/fraga/mcp.json`
+Configuration is file-based (JSON/JSONC) at `~/.config/fraga/`:
+- Providers can reference environment variables with `${VAR}` syntax (e.g. `"api_key": "${MY_OPENAI_API_KEY}"`), resolved at load time
+- Static runtime settings can be overridden via `FRAGA_MODEL`, `FRAGA_PROVIDER`, `FRAGA_TEMPERATURE`, `FRAGA_MAX_TOKENS`, and `FRAGA_RENDER_MARKDOWN`
+- MCP servers are configured in the `mcp` key of `~/.config/fraga/fraga.json`/`fraga.jsonc`
 
 ### Custom Headers
 
 Each provider supports custom HTTP headers via the `headers` field in the provider configuration:
 
 ```json
-"openai": {
+"my-openai": {
+  "type": "openai",
   "api_key": "sk-your-openai-api-key",
   "base_url": "https://api.openai.com/v1",
   "headers": {
@@ -279,16 +281,20 @@ Each provider supports custom HTTP headers via the `headers` field in the provid
 Custom headers are applied to every outgoing HTTP request for that provider. This is useful for:
 - Setting provider-specific beta flags
 - Adding authentication headers for proxies
-- Passing custom metadata (e.g., `HTTP-Referer` for OpenRouter)
+- Passing custom metadata
 
 
 ## Common Tasks
 
-Adding a new LLM provider:
+Adding a new LLM provider type:
 1. Create provider file in `internal/llm/`
 2. Implement `Provider` interface
-3. Add to `NewProvider()` switch statement
-4. Add config struct to `config.Providers`
+3. Add a case for the new `type` in `NewProvider()` in `provider.go`
+4. Allow the new type in provider validation in `internal/config/config.go`
+
+Users define named providers in the `providers` map, each with a `type` of
+`openai` or `anthropic` (e.g. multiple OpenAI-compatible endpoints like
+OpenRouter by overriding `base_url`).
 
 Adding a new command:
 1. Add command function in `internal/cli/commands.go`
@@ -313,11 +319,10 @@ None currently used. If needed:
 
 ## Environment for Development
 
-Required environment variables for testing:
+Required environment variables for testing (referenced from the config via `${VAR}` syntax):
 ```bash
-export FRAGA_OPENAI_API_KEY="your-key"
+export MY_OPENAI_API_KEY="your-key"
 # or
-export FRAGA_ANTHROPIC_API_KEY="your-key"
-# or
-export FRAGA_OPENROUTER_API_KEY="your-key"
+# Use OpenRouter through an OpenAI-type provider by setting its base URL to https://openrouter.ai/api/v1
+export MY_ANTHROPIC_API_KEY="your-key"
 ```

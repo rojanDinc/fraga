@@ -2,88 +2,116 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
+	"net/http"
+	"os"
+	"os/exec"
+	"slices"
+	"sort"
+	"time"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rojanDinc/fraga/internal/config"
 )
 
+const connectTimeout = 10 * time.Second
+
 type Client struct {
-	clients map[string]*client.Client
+	clients map[string]*mcp.ClientSession
+}
+
+type Tool struct {
+	Name        string
+	Description string
+	InputSchema map[string]interface{}
+	Server      string
+}
+
+type ToolResult struct {
+	Content []interface{}
+	IsError bool
+}
+
+type headerTransport struct {
+	headers map[string]string
+	base    http.RoundTripper
 }
 
 func New(cfg map[string]config.MCPServer) (*Client, error) {
-	clients := make(map[string]*client.Client)
+	clients := make(map[string]*mcp.ClientSession)
 
-	for name, serverCfg := range cfg {
-		var c *client.Client
-		var err error
+	// Sort server names so initialization failures are deterministic and the
+	// already-started clients can be cleaned up reliably.
 
-		if serverCfg.URL != "" {
-			c, err = client.NewSSEMCPClient(serverCfg.URL)
-		} else if serverCfg.Command != "" {
-			c, err = client.NewStdioMCPClient(serverCfg.Command, nil, serverCfg.Args...)
-		} else {
+	names := slices.Sorted(maps.Keys(cfg))
+
+	for _, name := range names {
+		serverCfg := cfg[name]
+		// Bound the connection handshake with a per-server timeout, so a
+		// dead or unresponsive server cannot hang startup forever.
+
+		ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+
+		var transport mcp.Transport
+		switch {
+		case serverCfg.URL != "":
+			httpClient := &http.Client{}
+			if len(serverCfg.Headers) > 0 {
+				httpClient.Transport = &headerTransport{headers: serverCfg.Headers, base: http.DefaultTransport}
+			}
+			transport = &mcp.StreamableClientTransport{Endpoint: serverCfg.URL, HTTPClient: httpClient}
+		case serverCfg.Command != "":
+			cmd := exec.Command(serverCfg.Command, serverCfg.Args...)
+			if env := envList(serverCfg.Env); len(env) > 0 {
+				cmd.Env = append(os.Environ(), env...)
+			}
+			transport = &mcp.CommandTransport{Command: cmd}
+		default:
+			cancel()
 			continue
 		}
 
+		client := mcp.NewClient(&mcp.Implementation{Name: "fraga", Version: "0.1.0"}, nil)
+		session, err := client.Connect(ctx, transport, nil)
+		cancel()
 		if err != nil {
-			return nil, fmt.Errorf("failed to create MCP client for %s: %w", name, err)
-		}
-
-		ctx := context.Background()
-		if err := c.Start(ctx); err != nil {
-			return nil, fmt.Errorf("failed to start MCP client for %s: %w", name, err)
-		}
-
-		initRequest := mcp.InitializeRequest{}
-		initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-		initRequest.Params.ClientInfo = mcp.Implementation{
-			Name:    "fraga",
-			Version: "0.1.0",
-		}
-
-		if _, err := c.Initialize(ctx, initRequest); err != nil {
+			closeAll(clients)
 			return nil, fmt.Errorf("failed to initialize MCP client for %s: %w", name, err)
 		}
 
-		clients[name] = c
+		clients[name] = session
 	}
 
 	return &Client{clients: clients}, nil
 }
 
 func (c *Client) Close() error {
+	var errs []error
 	for name, client := range c.clients {
 		if err := client.Close(); err != nil {
-			return fmt.Errorf("failed to close MCP client %s: %w", name, err)
+			errs = append(errs, fmt.Errorf("failed to close MCP client %s: %w", name, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (c *Client) ListTools(ctx context.Context) ([]Tool, error) {
 	var allTools []Tool
 
 	for serverName, client := range c.clients {
-		toolsResult, err := client.ListTools(ctx, mcp.ListToolsRequest{})
+		toolsResult, err := client.ListTools(ctx, &mcp.ListToolsParams{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to list tools from %s: %w", serverName, err)
 		}
 
 		for _, tool := range toolsResult.Tools {
-			schema := make(map[string]interface{})
-			if tool.InputSchema.Properties != nil {
-				schema["properties"] = tool.InputSchema.Properties
-			}
-			if tool.InputSchema.Required != nil {
-				schema["required"] = tool.InputSchema.Required
-			}
-			if tool.InputSchema.Type != "" {
-				schema["type"] = tool.InputSchema.Type
-			}
+			// Preserve the full input schema (type, properties, required, and
+			// any extra keys like additionalProperties or $schema), so providers
+			// receive complete tool semantics.
+
+			schema, _ := tool.InputSchema.(map[string]interface{})
 
 			allTools = append(allTools, Tool{
 				Name:        tool.Name,
@@ -103,14 +131,10 @@ func (c *Client) CallTool(ctx context.Context, serverName, toolName string, argu
 		return nil, fmt.Errorf("MCP server not found: %s", serverName)
 	}
 
-	req := mcp.CallToolRequest{}
-	req.Params.Name = toolName
-
-	if arguments != nil {
-		req.Params.Arguments = arguments
-	}
-
-	result, err := client.CallTool(ctx, req)
+	result, err := client.CallTool(ctx, &mcp.CallToolParams{
+		Name:      toolName,
+		Arguments: arguments,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to call tool %s: %w", toolName, err)
 	}
@@ -126,38 +150,32 @@ func (c *Client) CallTool(ctx context.Context, serverName, toolName string, argu
 	}, nil
 }
 
-type Tool struct {
-	Name        string
-	Description string
-	InputSchema map[string]interface{}
-	Server      string
-}
-
-type ToolResult struct {
-	Content []interface{}
-	IsError bool
-}
-
-func (t Tool) ToLLMTool() map[string]interface{} {
-	return map[string]interface{}{
-		"name":        t.Name,
-		"description": t.Description,
-		"parameters":  t.InputSchema,
+func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	for k, v := range t.headers {
+		req.Header.Set(k, v)
 	}
+	return t.base.RoundTrip(req)
 }
 
-func ToolResultsToJSON(results map[string]*ToolResult) (map[string]interface{}, error) {
-	jsonResults := make(map[string]interface{})
-	for name, result := range results {
-		data, err := json.Marshal(result)
-		if err != nil {
-			return nil, err
-		}
-		var obj interface{}
-		if err := json.Unmarshal(data, &obj); err != nil {
-			return nil, err
-		}
-		jsonResults[name] = obj
+// envList converts a server env map to KEY=VALUE pairs. The pairs are
+// appended to the inherited process environment by the command transport, so
+// configured variables take precedence.
+
+func envList(env map[string]string) []string {
+	if len(env) == 0 {
+		return nil
 	}
-	return jsonResults, nil
+	list := make([]string, 0, len(env))
+	for k, v := range env {
+		list = append(list, k+"="+v)
+	}
+	sort.Strings(list)
+	return list
+}
+
+func closeAll(clients map[string]*mcp.ClientSession) {
+	for _, c := range clients {
+		c.Close()
+	}
 }

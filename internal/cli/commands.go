@@ -1,9 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/rojanDinc/fraga/internal/config"
 	"github.com/spf13/cobra"
@@ -18,7 +18,7 @@ func newInitCmd() *cobra.Command {
 			// Create config file
 			if err := config.InitDefault(); err != nil {
 				// If it already exists, that's OK
-				if !strings.HasPrefix(err.Error(), "config already exists") {
+				if !errors.Is(err, config.ErrConfigExists) {
 					return err
 				}
 				cfgDir, err := config.GetConfigDir()
@@ -62,7 +62,7 @@ func newListToolsCmd() *cobra.Command {
 			fmt.Println("Configured MCP servers:")
 			for name, server := range cfg.MCP {
 				if server.URL != "" {
-					fmt.Printf("  - %s: %s (SSE)\n", name, server.URL)
+					fmt.Printf("  - %s: %s (streamable HTTP)\n", name, server.URL)
 				} else {
 					fmt.Printf("  - %s: %s %v (stdio)\n", name, server.Command, server.Args)
 				}
