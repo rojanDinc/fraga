@@ -34,7 +34,8 @@ func NewRootCmd() *cobra.Command {
 		Long:  `Fraga is a CLI tool for asking one-shot questions to LLMs with MCP tool support.`,
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAsk(cmd.Context(), strings.Join(args, " "))
+			q := strings.TrimSpace(strings.Join(args, " "))
+			return runAsk(cmd.Context(), q)
 		},
 	}
 
@@ -48,6 +49,10 @@ func NewRootCmd() *cobra.Command {
 }
 
 func runAsk(ctx context.Context, question string) error {
+	if len(question) == 0 {
+		return errors.New("no question was provided")
+	}
+
 	startTime := time.Now()
 
 	cfgDir, err := config.GetConfigDir()
