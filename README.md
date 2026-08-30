@@ -136,3 +136,14 @@ Remote MCP servers using the Streamable HTTP transport:
 ```
 
 Values can reference environment variables with the `${VAR}` syntax, e.g. `"Authorization": "Bearer ${MCP_TOKEN}"`.
+
+## Answer Speed
+
+How fast you get an answer depends on a few things:
+
+- **MCP tools**: When MCP tools are configured, the LLM takes longer to answer because it must first process the list of available tools, and actually using a tool adds another round trip. For the fastest answers, omit MCP tools. The number of tools matters too: every tool's definition is sent with each request, so more tools mean more tokens per request.
+- **Provider**: Speed also depends on which provider you use. For example, using OpenRouter with a nitro provider lets questions be processed by the provider more quickly. Provider-side load (queueing and rate limits) also plays a role.
+- **Model**: Larger or reasoning-focused models take longer to answer than small, fast ones (e.g. a haiku-class model vs. an opus-class model).
+- **`max_tokens`**: A higher limit lets the model generate more tokens, so responses take longer.
+- **Input length**: Longer questions and the system prompt add prefill time before generation starts.
+- **Streaming**: Fraga waits for the full response before displaying it, it does not stream tokens as they are generated.
