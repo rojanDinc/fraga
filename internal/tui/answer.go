@@ -31,7 +31,7 @@ func renderMarkdown(content string) error {
 	}
 
 	if _, err := os.Stdout.WriteString(out); err != nil {
-		fmt.Errorf("failed to write output: %w", err)
+		return fmt.Errorf("failed to write output: %w", err)
 	}
 
 	return nil
