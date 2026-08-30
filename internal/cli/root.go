@@ -3,8 +3,8 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -33,7 +33,8 @@ func NewRootCmd() *cobra.Command {
 		Long:  `Fraga is a CLI tool for asking one-shot questions to LLMs with MCP tool support.`,
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAsk(cmd.Context(), strings.Join(args, " "))
+			q := strings.TrimSpace(strings.Join(args, " "))
+			return runAsk(cmd.Context(), q)
 		},
 	}
 
@@ -47,6 +48,10 @@ func NewRootCmd() *cobra.Command {
 }
 
 func runAsk(ctx context.Context, question string) error {
+	if len(question) == 0 {
+		return errors.New("no question was provided")
+	}
+
 	startTime := time.Now()
 
 	cfgDir, err := config.GetConfigDir()
@@ -172,7 +177,7 @@ func runAsk(ctx context.Context, question string) error {
 
 		if len(result.ToolCalls) == 0 {
 			if err := tui.PrintAnswer(result.Content, settings.ShouldRenderMarkdown()); err != nil {
-				slog.Error("failed to print answer", "err", err)
+				return fmt.Errorf("failed to print answer: %w", err)
 			}
 			tui.Footer(time.Since(startTime), totalInputTokens, totalOutputTokens, providerName, model)
 			return nil
