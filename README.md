@@ -1,63 +1,62 @@
 # Fraga
 
-<p align="center">Fraga (Fråga in Swedish) translates to "question" in English<br />is a CLI tool for asking one-shot questions to LLMs.</p>
+<p align="center">Fraga (Fråga in Swedish) translates to "ask" in English<br />is a CLI tool for asking one-shot questions to LLMs, all in your terminal.</p>
 
 <p align="center"><img width="800" alt="Fraga demo" src="docs/images/demo.gif" /></p>
 
-## Installation
+## Features
+
+- One-shot questions for quick answers.
+- MCP tool support.
+- OpenAI & Anthropic compatible, use any provider that supports these APIs.
+
+## Quickstart
+
+### Installation
 
 ```bash
 go install github.com/rojanDinc/fraga@latest
 ```
 
-## Configuration
+### Configuration
 
 Run `fraga init` to create a default configuration file at `~/.config/fraga/fraga.jsonc`.
 
 Check the example [config](./internal/config/examples/config.jsonc) file for a full example.
 
-### Adding a Provider
+#### Adding a Provider
 
 Each provider has a `type` of `openai` or `anthropic`. Add as many named providers as you need; the `provider` setting selects which one is used.
 
-#### OpenAI-Compatible Providers
-
-Point `base_url` at any OpenAI-compatible endpoint, such as the official OpenAI API, OpenRouter, or a local server like LM Studio:
+##### Configuring Providers
 
 ```jsonc
-"providers": {
-  "my-openai": {
-    "type": "openai",
-    "api_key": "sk-your-openai-api-key",
-    "base_url": "https://api.openai.com/v1"
+{
+  "provider": "openrouter",
+  "model": "google/gemma-4-31b-it",
+  "providers": {
+    "openrouter": {
+      "type": "openai",
+      "api_key": "sk-your-openai-api-key",
+      "base_url": "https://openrouter.ai/api/v1"
+    },
+    "my-anthropic": {
+      "type": "anthropic",
+      "api_key": "sk-ant-your-anthropic-api-key",
+      "base_url": "https://api.anthropic.com",
+      "headers": {
+        "header-1": "value-1"
+      }
+    }
+    "local": {
+      "type": "openai",
+      "base_url": "https://localhost:1234/v1"
+    }
   }
 }
 ```
 
-or to use local AI (LM Studio):
-
-```jsonc
-"providers": {
-  "local": {
-    "type": "openai",
-    "base_url": "https://localhost:1234/v1"
-  }
-}
-```
-
-#### Anthropic-Compatible Providers
-
-```jsonc
-"providers": {
-  "my-anthropic": {
-    "type": "anthropic",
-    "api_key": "sk-ant-your-anthropic-api-key",
-    "base_url": "https://api.anthropic.com"
-  }
-}
-```
-
-#### Environment Variables
+##### Environment Variables
 
 Any provider value can reference an environment variable with the `${VAR}` syntax, which is resolved when the config is loaded. This is the recommended way to keep secrets like API keys out of the config file:
 
@@ -97,11 +96,13 @@ Use a specific model:
 fraga --model claude-haiku-4.5 "Explain goroutines in Go"
 ```
 
-### Commands
+### Commands and Flags
 
-- `fraga init` - Initialize configuration file
-- `fraga list-tools` - List available MCP tools
-- `fraga [question]` - Ask a question
+- `fraga init`, initializes a fraga config file in the system home dir if it doesn't exist.
+- `fraga list-tools`, lists available MCP tools configured.
+- `fraga [question]`, ask a question.
+  - `-p, --provider`, override the configured provider.
+  - `-m, --model string`, override the configured model.
 
 ## MCP Setup
 
