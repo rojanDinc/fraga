@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 
@@ -32,7 +31,7 @@ func renderMarkdown(content string) error {
 	}
 
 	if _, err := os.Stdout.WriteString(out); err != nil {
-		slog.Error("failed to write output", "error", err)
+		fmt.Errorf("failed to write output: %w", err)
 	}
 
 	return nil

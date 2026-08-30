@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -172,7 +173,7 @@ func runAsk(ctx context.Context, question string) error {
 
 		if len(result.ToolCalls) == 0 {
 			if err := tui.PrintAnswer(result.Content, settings.ShouldRenderMarkdown()); err != nil {
-				slog.Error("failed to print answer", "err", err)
+				fmt.Errorf("failed to print answer: %w", err)
 			}
 			tui.Footer(time.Since(startTime), totalInputTokens, totalOutputTokens, providerName, model)
 			return nil
