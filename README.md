@@ -47,7 +47,7 @@ Each provider has a `type` of `openai` or `anthropic`. Add as many named provide
       "headers": {
         "header-1": "value-1"
       }
-    }
+    },
     "local": {
       "type": "openai",
       "base_url": "https://localhost:1234/v1"
