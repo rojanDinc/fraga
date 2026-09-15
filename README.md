@@ -15,7 +15,7 @@
 ### Installation
 
 ```bash
-go install github.com/rojanDinc/fraga@latest
+go install github.com/rojanDinc/fraga/cmd/fraga@latest
 ```
 
 ### Configuration
